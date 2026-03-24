@@ -1,4 +1,4 @@
-import * as sanitizeHtml from 'sanitize-html';
+import sanitizeHtml from 'sanitize-html';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
