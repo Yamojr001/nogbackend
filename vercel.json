@@ -2,9 +2,21 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run build",
+  "builds": [
+    {
+      "src": "api/[...all].js",
+      "use": "@vercel/node"
+    }
+  ],
   "functions": {
     "api/[...all].js": {
       "maxDuration": 30
     }
-  }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/[...all].js"
+    }
+  ]
 }
