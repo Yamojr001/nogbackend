@@ -85,34 +85,39 @@ import { SupportModule } from './support/support.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST', 'localhost'),
-        port: +config.get<number>('DB_PORT', 5432),
-        username: config.get<string>('DB_USER', 'postgres'),
-        password: config.get<string>('DB_PASS', 'postgres'),
-        database: config.get<string>('DB_NAME', 'postgres'),
-        url: config.get<string>('DATABASE_URL'), // Support full connection string
-        entities: [
-          User, Organisation, Wallet, Ledger,
-          Loan, Approval, Audit, Notification,
-          Group, Member, LoanRepayment, ApprovalLog,
-          Contribution, SystemConfig,
-          Branch, Product, KycDocument, Transaction,
-          ContributionPeriod, RepaymentSchedule, ProductSubscription,
-          AdminSession, ApprovalWorkflowConfig, CustodialAccount,
-          SettlementBatch, ReportExport, RolePermission, SystemAlert,
-          Collection, BranchTarget, BranchExpense,
-          Attendance, Meeting, SupportTicket, Guarantor, Beneficiary, EmailLog, OtpCode, SmsLog, UserTour,
-          BankAccount, NextOfKin, EmpowermentProgram, ProgramApplication,
-          VirtualAccount
-        ],
-        synchronize: config.get<boolean>('DB_SYNCHRONIZE', true),
-        ssl: config.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
-        extra: {
-          connectTimeoutMS: 60000,
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const syncRaw = config.get<string>('DB_SYNCHRONIZE', 'false');
+        const synchronize = syncRaw === 'true';
+
+        return {
+          type: 'postgres',
+          host: config.get<string>('DB_HOST', 'localhost'),
+          port: +config.get<number>('DB_PORT', 5432),
+          username: config.get<string>('DB_USER', 'postgres'),
+          password: config.get<string>('DB_PASS', 'postgres'),
+          database: config.get<string>('DB_NAME', 'postgres'),
+          url: config.get<string>('DATABASE_URL'), // Support full connection string
+          entities: [
+            User, Organisation, Wallet, Ledger,
+            Loan, Approval, Audit, Notification,
+            Group, Member, LoanRepayment, ApprovalLog,
+            Contribution, SystemConfig,
+            Branch, Product, KycDocument, Transaction,
+            ContributionPeriod, RepaymentSchedule, ProductSubscription,
+            AdminSession, ApprovalWorkflowConfig, CustodialAccount,
+            SettlementBatch, ReportExport, RolePermission, SystemAlert,
+            Collection, BranchTarget, BranchExpense,
+            Attendance, Meeting, SupportTicket, Guarantor, Beneficiary, EmailLog, OtpCode, SmsLog, UserTour,
+            BankAccount, NextOfKin, EmpowermentProgram, ProgramApplication,
+            VirtualAccount
+          ],
+          synchronize,
+          ssl: config.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
+          extra: {
+            connectTimeoutMS: 60000,
+          },
+        };
+      },
     }),
     AuthModule,
     UserModule,
