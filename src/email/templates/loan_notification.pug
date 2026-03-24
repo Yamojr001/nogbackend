@@ -1,0 +1,15 @@
+extends layout
+
+block content
+  h2 Loan Status Update
+  p Hello #{name},
+  p Your loan application has been <strong>#{status}</strong>.
+  div(style="background: #f7fafc; padding: 20px; border-radius: 6px; margin: 20px 0;")
+    p(style="margin: 5px 0;") <strong>Loan ID:</strong> #{loanId}
+    p(style="margin: 5px 0;") <strong>Amount Requested:</strong> #{currency} #{amount}
+    if comments
+      p(style="margin: 5px 0;") <strong>Notes:</strong> #{comments}
+  if status == 'approved'
+    p Fund disbursement will proceed according to the terms of service.
+  else
+    p If you have any questions regarding this decision, please contact your group administrator.

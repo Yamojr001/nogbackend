@@ -1,0 +1,12 @@
+extends layout
+
+block content
+  h2 Contribution Receipt
+  p Hello #{name},
+  p Your recent contribution has been recorded successfully.
+  div(style="background: #f7fafc; padding: 20px; border-radius: 6px; margin: 20px 0;")
+    p(style="margin: 5px 0;") <strong>Amount:</strong> #{currency} #{amount}
+    p(style="margin: 5px 0;") <strong>Group:</strong> #{groupName}
+    p(style="margin: 5px 0;") <strong>Reference:</strong> #{reference}
+    p(style="margin: 5px 0;") <strong>Date:</strong> #{date}
+  p Thank you for your continued support and commitment to the cooperative.

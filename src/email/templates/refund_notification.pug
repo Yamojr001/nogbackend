@@ -1,0 +1,12 @@
+extends layout
+
+block content
+  h2 Refund Notification
+  p Hello #{name},
+  p A refund has been processed for your account.
+  div(style="background: #f7fafc; padding: 20px; border-radius: 6px; margin: 20px 0;")
+    p(style="margin: 5px 0;") <strong>Refund Amount:</strong> #{currency} #{amount}
+    p(style="margin: 5px 0;") <strong>Original Reference:</strong> #{originalReference}
+    p(style="margin: 5px 0;") <strong>Date:</strong> #{date}
+    p(style="margin: 5px 0;") <strong>Status:</strong> COMPLETED
+  p The funds have been returned to your wallet. If you have any questions, please contact our support team.
