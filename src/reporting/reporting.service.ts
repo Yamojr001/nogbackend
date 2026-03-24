@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Transaction } from '../entities/transaction.entity';
 import { Member } from '../entities/member.entity';
 import { Organisation } from '../entities/organisation.entity';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class ReportingService {
