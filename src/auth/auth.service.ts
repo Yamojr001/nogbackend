@@ -26,12 +26,14 @@ import { BankAccount, OwnerType } from '../entities/bank-account.entity';
 @Injectable()
 export class AuthService {
   private isMissingColumnError(error: unknown): boolean {
-    const message = (error as any)?.message || '';
+    const message = ((error as any)?.message || '').toLowerCase();
+    const code = (error as any)?.code;
     return (
-      error instanceof QueryFailedError &&
-      typeof message === 'string' &&
-      message.toLowerCase().includes('column') &&
-      message.toLowerCase().includes('does not exist')
+      error instanceof QueryFailedError ||
+      code === '42703' ||
+      code === '42P01' ||
+      (message.includes('column') && message.includes('does not exist')) ||
+      (message.includes('relation') && message.includes('does not exist'))
     );
   }
 
@@ -44,13 +46,28 @@ export class AuthService {
         throw error;
       }
 
-      const rows = await this.dataSource.query(
-        `SELECT id, email, password, role, "organisationId"
-         FROM "user"
-         WHERE email = $1
-         LIMIT 1`,
-        [email],
-      );
+      let rows: any[] = [];
+      try {
+        rows = await this.dataSource.query(
+          `SELECT id, email, password, role
+           FROM "user"
+           WHERE email = $1
+           LIMIT 1`,
+          [email],
+        );
+      } catch (innerError) {
+        if (!this.isMissingColumnError(innerError)) {
+          throw innerError;
+        }
+
+        rows = await this.dataSource.query(
+          `SELECT id, email, password, role
+           FROM users
+           WHERE email = $1
+           LIMIT 1`,
+          [email],
+        );
+      }
 
       if (!rows.length) return null;
       const row = rows[0];
@@ -60,8 +77,8 @@ export class AuthService {
         email: row.email,
         password: row.password,
         role: row.role,
-        organisationId: row.organisationId ?? null,
-        organisation: row.organisationId ? { id: row.organisationId } : undefined,
+        organisationId: null,
+        organisation: undefined,
         failedLoginAttempts: 0,
         needsCaptcha: false,
         lockUntil: null,
