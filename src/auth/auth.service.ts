@@ -385,6 +385,8 @@ export class AuthService {
     const user = await this.findUserForLogin(email);
     if (!user) return null;
 
+    console.log(`[Auth] Login attempt for ${email} - user found: ${!!user}`);
+
     // Phase 5: Brute-force protection
     if (user.lockUntil && user.lockUntil > new Date()) {
       const remainingMinutes = Math.ceil((user.lockUntil.getTime() - Date.now()) / 60000);
@@ -394,6 +396,7 @@ export class AuthService {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
+      console.log(`[Auth] User ${email} successfully logged in`);
       // Success: Reset failure count and captcha
       if (user.failedLoginAttempts > 0 || user.lockUntil || user.needsCaptcha) {
         await this.safeUserUpdate(user.id, { failedLoginAttempts: 0, lockUntil: null, needsCaptcha: false });
