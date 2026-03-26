@@ -258,7 +258,8 @@ export class AuthService {
     // 2. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3. Start Atomic Transaction
+        console.log(`[Register] Resolving org code: ${organisationCode}`);
+        const org = await this.dataSource.getRepository(Organisation).findOne({ where: { code: organisationCode } });
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
