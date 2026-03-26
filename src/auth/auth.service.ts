@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
 import { Member } from '../entities/member.entity';
 import { Wallet, WalletType } from '../entities/wallet.entity';
@@ -25,6 +25,62 @@ import { BankAccount, OwnerType } from '../entities/bank-account.entity';
 
 @Injectable()
 export class AuthService {
+  private isMissingColumnError(error: unknown): boolean {
+    const message = (error as any)?.message || '';
+    return (
+      error instanceof QueryFailedError &&
+      typeof message === 'string' &&
+      message.toLowerCase().includes('column') &&
+      message.toLowerCase().includes('does not exist')
+    );
+  }
+
+  private async findUserForLogin(email: string): Promise<any | null> {
+    try {
+      return await this.userRepository.findOne({ where: { email }, relations: ['organisation'] });
+    } catch (error) {
+      // Fallback for environments with older DB schema missing optional auth columns.
+      if (!this.isMissingColumnError(error)) {
+        throw error;
+      }
+
+      const rows = await this.dataSource.query(
+        `SELECT id, email, password, role, "organisationId"
+         FROM "user"
+         WHERE email = $1
+         LIMIT 1`,
+        [email],
+      );
+
+      if (!rows.length) return null;
+      const row = rows[0];
+
+      return {
+        id: row.id,
+        email: row.email,
+        password: row.password,
+        role: row.role,
+        organisationId: row.organisationId ?? null,
+        organisation: row.organisationId ? { id: row.organisationId } : undefined,
+        failedLoginAttempts: 0,
+        needsCaptcha: false,
+        lockUntil: null,
+        refreshTokenHash: null,
+      };
+    }
+  }
+
+  private async safeUserUpdate(userId: number, payload: Partial<User>) {
+    try {
+      await this.userRepository.update(userId, payload);
+    } catch (error) {
+      if (!this.isMissingColumnError(error)) {
+        throw error;
+      }
+      // Ignore updates that target columns not present in older schemas.
+    }
+  }
+
   private validatePasswordStrength(password: string): boolean {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
@@ -309,7 +365,7 @@ export class AuthService {
   }
 
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.userRepository.findOne({ where: { email }, relations: ['organisation'] });
+    const user = await this.findUserForLogin(email);
     if (!user) return null;
 
     // Phase 5: Brute-force protection
@@ -323,7 +379,7 @@ export class AuthService {
     if (isMatch) {
       // Success: Reset failure count and captcha
       if (user.failedLoginAttempts > 0 || user.lockUntil || user.needsCaptcha) {
-        await this.userRepository.update(user.id, { failedLoginAttempts: 0, lockUntil: null, needsCaptcha: false });
+        await this.safeUserUpdate(user.id, { failedLoginAttempts: 0, lockUntil: null, needsCaptcha: false });
       }
       const { password: _, refreshTokenHash: __, ...result } = user;
       return result;
@@ -340,7 +396,7 @@ export class AuthService {
       if (failedAttempts >= 5) {
         lockUntil = new Date(Date.now() + 10 * 60000); // 10 minutes
       }
-      await this.userRepository.update(user.id, { failedLoginAttempts: failedAttempts, lockUntil, needsCaptcha });
+      await this.safeUserUpdate(user.id, { failedLoginAttempts: failedAttempts, lockUntil, needsCaptcha });
       
       if (needsCaptcha) {
         throw new UnauthorizedException({ message: 'Invalid credentials', needsCaptcha: true });
@@ -415,7 +471,7 @@ export class AuthService {
       const payload = { sub: user.id };
       const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
-      await this.userRepository.update(user.id, { refreshTokenHash });
+      await this.safeUserUpdate(user.id, { refreshTokenHash });
       return refreshToken;
     } catch (error) {
       console.error('[Auth] Generate refresh token failed:', error.message);
