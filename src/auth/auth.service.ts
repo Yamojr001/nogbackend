@@ -350,43 +350,77 @@ export class AuthService {
   }
 
   async login(user: any, ipAddress?: string, userAgent?: string) {
-    const payload = {
-      email: user.email,
-      sub: user.id,
-      role: user.role,
-      organisationId: user.organisation?.id ?? user.organisationId ?? null,
-    };
-    // Security: detect new login device/IP
     try {
-      await this.securityService.detectNewLogin(user.id, ipAddress || 'unknown', userAgent || 'Unknown Browser');
-    } catch (err) { /* non-blocking */ }
+      const payload = {
+        email: user.email,
+        sub: user.id,
+        role: user.role,
+        organisationId: user.organisation?.id ?? user.organisationId ?? null,
+      };
 
-    // Audit: record login event
-    try {
-      await this.auditRepository.save(
-        this.auditRepository.create({
-          userId: user.id,
-          action: 'USER_LOGIN',
-          entityType: 'User',
-          entityId: String(user.id),
-          ipAddress: ipAddress || 'unknown',
-          details: `User ${user.email} logged in`,
-          metadata: { email: user.email, role: user.role, userAgent: userAgent || 'Unknown Browser' },
-        }),
-      );
-    } catch (_) { /* non-blocking */ }
-    return {
-      access_token: this.jwtService.sign(payload),
-      refresh_token: await this.generateRefreshToken(user),
-    };
+      // Security: detect new login device/IP
+      try {
+        await this.securityService.detectNewLogin(user.id, ipAddress || 'unknown', userAgent || 'Unknown Browser');
+      } catch (err) { 
+        console.error('[Auth] Security service error (non-blocking):', err.message);
+      }
+
+      // Audit: record login event
+      try {
+        await this.auditRepository.save(
+          this.auditRepository.create({
+            userId: user.id,
+            action: 'USER_LOGIN',
+            entityType: 'User',
+            entityId: String(user.id),
+            ipAddress: ipAddress || 'unknown',
+            details: `User ${user.email} logged in`,
+            metadata: { email: user.email, role: user.role, userAgent: userAgent || 'Unknown Browser' },
+          }),
+        );
+      } catch (err) {
+        console.error('[Auth] Audit save error (non-blocking):', err.message);
+      }
+
+      // Generate tokens
+      let accessToken: string;
+      let refreshToken: string;
+      
+      try {
+        accessToken = this.jwtService.sign(payload);
+      } catch (err) {
+        console.error('[Auth] JWT sign failed:', err.message, 'Payload:', payload);
+        throw new Error(`Failed to generate access token: ${err.message}`);
+      }
+
+      try {
+        refreshToken = await this.generateRefreshToken(user);
+      } catch (err) {
+        console.error('[Auth] Refresh token generation failed:', err.message);
+        throw new Error(`Failed to generate refresh token: ${err.message}`);
+      }
+
+      return {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      };
+    } catch (error) {
+      console.error('[Auth] Login failed:', error.message, error);
+      throw error;
+    }
   }
 
   async generateRefreshToken(user: any): Promise<string> {
-    const payload = { sub: user.id };
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
-    const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
-    await this.userRepository.update(user.id, { refreshTokenHash });
-    return refreshToken;
+    try {
+      const payload = { sub: user.id };
+      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
+      const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+      await this.userRepository.update(user.id, { refreshTokenHash });
+      return refreshToken;
+    } catch (error) {
+      console.error('[Auth] Generate refresh token failed:', error.message);
+      throw new Error(`Failed to generate refresh token: ${error.message}`);
+    }
   }
 
   async refreshToken(refreshToken: string) {
