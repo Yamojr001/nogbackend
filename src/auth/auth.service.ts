@@ -499,16 +499,16 @@ export class AuthService {
   }
 
   async generateRefreshToken(user: any): Promise<string> {
+    const payload = { sub: user.id };
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
     try {
-      const payload = { sub: user.id };
-      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
       await this.safeUserUpdate(user.id, { refreshTokenHash });
-      return refreshToken;
     } catch (error) {
-      console.error('[Auth] Generate refresh token failed:', error.message);
-      throw new Error(`Failed to generate refresh token: ${error.message}`);
+      // Non-blocking: login should still succeed even if legacy schema cannot persist token hash.
+      console.error('[Auth] Refresh token hash persistence skipped:', (error as any)?.message);
     }
+    return refreshToken;
   }
 
   async refreshToken(refreshToken: string) {
