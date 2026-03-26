@@ -25,6 +25,16 @@ import { BankAccount, OwnerType } from '../entities/bank-account.entity';
 
 @Injectable()
 export class AuthService {
+  private normalizeBcryptHash(hash: string | null | undefined): string {
+    if (!hash) return '';
+    // Some legacy systems store bcrypt hashes with $2y$ prefix (PHP).
+    // Node bcrypt expects $2a$/$2b$ and treats $2y$ as incompatible.
+    if (hash.startsWith('$2y$')) {
+      return `$2b$${hash.slice(4)}`;
+    }
+    return hash;
+  }
+
   private isMissingColumnError(error: unknown): boolean {
     const message = ((error as any)?.message || '').toLowerCase();
     const code = (error as any)?.code;
@@ -394,7 +404,8 @@ export class AuthService {
       throw new UnauthorizedException(`Account is locked. Try again in ${remainingMinutes} minutes.`);
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const normalizedHash = this.normalizeBcryptHash(user.password);
+    const isMatch = await bcrypt.compare(password, normalizedHash);
 
     if (isMatch) {
       console.log(`[Auth] User ${email} successfully logged in`);
