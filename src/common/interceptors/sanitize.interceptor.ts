@@ -5,7 +5,10 @@ import {
   CallHandler,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import sanitizeHtml from 'sanitize-html';
+import * as sanitizeHtmlLib from 'sanitize-html';
+
+const sanitizeHtml =
+  (sanitizeHtmlLib as any).default || (sanitizeHtmlLib as unknown as (input: string, options?: any) => string);
 
 @Injectable()
 export class SanitizeInterceptor implements NestInterceptor {
