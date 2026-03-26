@@ -13,7 +13,10 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     let user: any = null;
     try {
       user = await this.authService.validateUser(username, password);
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       // Do not leak backend internals to clients during authentication.
       throw new UnauthorizedException('Invalid credentials');
     }
