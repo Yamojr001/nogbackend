@@ -1,11 +1,11 @@
-import { Controller, Request, Post, Get, UseGuards, Body } from '@nestjs/common';
+import { Controller, Request, Post, Get, UseGuards, Body, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './local-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
@@ -54,7 +54,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@Request() req) {
-    return req.user; // Returns { userId, email, role, organisationId } from JWT
+    return req.user;
   }
 
   @Post('forgot-password')
@@ -65,5 +65,20 @@ export class AuthController {
   @Post('reset-password')
   async resetPassword(@Body() dto: { token: string, password: string }) {
     return this.authService.resetPassword(dto.token, dto.password);
+  }
+
+  @Get('hierarchy/organisations')
+  async getPublicOrganisations() {
+    return this.authService.getPublicOrganisations();
+  }
+
+  @Get('hierarchy/organisations/:id/sub-orgs')
+  async getPublicSubOrgs(@Param('id') id: string) {
+    return this.authService.getPublicSubOrgs(+id);
+  }
+
+  @Get('hierarchy/sub-orgs/:id/groups')
+  async getPublicGroups(@Param('id') id: string) {
+    return this.authService.getPublicGroups(+id);
   }
 }

@@ -128,6 +128,12 @@ export class RegisterUserDto {
   subOrgId?: number;
 
   @IsOptional()
+  groupId?: number;
+
+  @IsOptional()
+  branchId?: number;
+
+  @IsOptional()
   registrationOfficerId?: number;
 
   @IsString()

@@ -10,6 +10,7 @@ import { User, UserRole } from '../entities/user.entity';
 import { Member } from '../entities/member.entity';
 import { Wallet, WalletType } from '../entities/wallet.entity';
 import { Organisation } from '../entities/organisation.entity';
+import { Group } from '../entities/group.entity';
 import { Audit } from '../entities/audit.entity';
 import { RegisterUserDto } from './dto/register.dto';
 import { EmailService } from '../email/email.service';
@@ -27,8 +28,6 @@ import { BankAccount, OwnerType } from '../entities/bank-account.entity';
 export class AuthService {
   private normalizeBcryptHash(hash: string | null | undefined): string {
     if (!hash) return '';
-    // Some legacy systems store bcrypt hashes with $2y$ prefix (PHP).
-    // Node bcrypt expects $2a$/$2b$ and treats $2y$ as incompatible.
     if (hash.startsWith('$2y$')) {
       return `$2b$${hash.slice(4)}`;
     }
@@ -322,6 +321,8 @@ export class AuthService {
         walletId: savedWallet.id,
         organisationId: organisationId,
         subOrgId: dto.subOrgId,
+        groupId: dto.groupId,
+        branchId: dto.branchId,
         registrationOfficerId: dto.registrationOfficerId,
         gender: dto.gender,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
@@ -530,5 +531,26 @@ export class AuthService {
   async logout(userId: number): Promise<{ message: string }> {
     await this.userRepository.update(userId, { refreshTokenHash: null });
     return { message: 'Logged out successfully' };
+  }
+
+  async getPublicOrganisations() {
+    return this.dataSource.getRepository(Organisation).find({
+      select: ['id', 'name', 'code', 'type'],
+      where: { type: 'partner' as any, status: 'active' as any }
+    });
+  }
+
+  async getPublicSubOrgs(parentId: number) {
+    return this.dataSource.getRepository(Organisation).find({
+      select: ['id', 'name', 'code', 'type'],
+      where: { parent: { id: parentId } as any, type: 'sub_org' as any, status: 'active' as any }
+    });
+  }
+
+  async getPublicGroups(subOrgId: number) {
+    return this.dataSource.getRepository(Group).find({
+      select: ['id', 'name'],
+      where: { subOrg: { id: subOrgId } as any, status: 'active' as any }
+    });
   }
 }
