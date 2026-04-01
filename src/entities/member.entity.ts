@@ -18,7 +18,7 @@ export class Member {
   @JoinColumn()
   user: User;
 
-  @Column()
+  @Column({ nullable: true })
   userId: number;
 
   @Column({ nullable: true })
