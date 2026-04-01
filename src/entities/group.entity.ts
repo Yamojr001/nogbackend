@@ -14,7 +14,7 @@ export class Group {
   @ManyToOne(() => Organisation)
   subOrg: Organisation;
 
-  @Column()
+  @Column({ nullable: true })
   subOrgId: number;
 
   @ManyToOne(() => Branch, { nullable: true })
