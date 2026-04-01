@@ -69,73 +69,76 @@ export class Transaction {
   channel: TransactionChannel;
 
   @ManyToOne(() => Wallet, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'from_wallet_id' })
   fromWallet: Wallet;
 
-  @Column({ nullable: true })
+  @Column({ name: 'from_wallet_id', nullable: true })
   fromWalletId: number;
 
   @ManyToOne(() => Wallet, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'to_wallet_id' })
   toWallet: Wallet;
 
-  @Column({ nullable: true })
+  @Column({ name: 'to_wallet_id', nullable: true })
   toWalletId: number;
 
   @ManyToOne(() => Member, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'member_id' })
   member: Member;
 
   @Index()
-  @Column({ nullable: true })
+  @Column({ name: 'member_id', nullable: true })
   memberId: number;
 
   @ManyToOne(() => Organisation)
-  @JoinColumn()
+  @JoinColumn({ name: 'organisation_id' })
   organisation: Organisation;
 
   @Index()
-  @Column()
+  @Column({ name: 'organisation_id' })
   organisationId: number;
 
   @ManyToOne(() => Branch, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'branch_id' })
   branch: Branch;
 
-  @Column({ nullable: true })
+  @Column({ name: 'branch_id', nullable: true })
   branchId: number;
 
   @ManyToOne(() => Group, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'group_id' })
   group: Group;
 
-  @Column({ nullable: true })
+  @Column({ name: 'group_id', nullable: true })
   groupId: number;
 
   @Column({ nullable: true, type: 'text' })
   description: string;
 
-  @Column({ nullable: true })
-  balanceBefore: number; // Wallet balance before transaction
+  @Column({ name: 'balance_before', type: 'decimal', precision: 15, scale: 2, nullable: true })
+  balanceBefore: number; 
 
-  @Column({ nullable: true })
-  balanceAfter: number;  // Wallet balance after transaction
+  @Column({ name: 'balance_after', type: 'decimal', precision: 15, scale: 2, nullable: true })
+  balanceAfter: number;  
 
-  @Column({ nullable: true })
-  externalReference: string; // Bank/payment gateway reference
+  @Column({ name: 'external_reference', nullable: true })
+  externalReference: string; 
 
-  @Column({ nullable: true })
-  processedBy: number; // User ID of officer who processed
+  @Column({ name: 'processed_by', nullable: true })
+  processedBy: number; 
 
-  @Column({ nullable: true })
-  approvedBy: number; // User ID of approver (if required)
+  @Column({ name: 'approved_by', nullable: true })
+  approvedBy: number; 
 
-  @Column({ nullable: true })
-  reversalOf: number; // ID of the original transaction (for reversals)
+  @Column({ name: 'reversal_of', nullable: true })
+  reversalOf: number; 
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ nullable: true, type: 'timestamp' })
+  @Column({ name: 'completed_at', nullable: true, type: 'timestamp' })
   completedAt: Date;
+
+  @Column({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
 }

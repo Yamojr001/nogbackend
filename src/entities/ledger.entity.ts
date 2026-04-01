@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Wallet } from './wallet.entity';
 
 export enum TransactionType {
@@ -10,27 +10,35 @@ export enum TransactionType {
   CONTRIBUTION = 'contribution',
 }
 
-@Entity()
+@Entity('ledgers')
 export class Ledger {
   @PrimaryGeneratedColumn()
   id: number;
 
   @ManyToOne(() => Wallet, { nullable: true })
+  @JoinColumn({ name: 'source_wallet_id' })
   sourceWallet: Wallet;
 
+  @Column({ name: 'source_wallet_id', nullable: true })
+  sourceWalletId: number;
+
   @ManyToOne(() => Wallet, { nullable: true })
+  @JoinColumn({ name: 'destination_wallet_id' })
   destinationWallet: Wallet;
 
+  @Column({ name: 'destination_wallet_id', nullable: true })
+  destinationWalletId: number;
+
   @Column()
-  type: string; // Using string to support the expanded enum values easily
+  type: string; 
 
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   amount: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  @Column({ name: 'source_balance_after', type: 'decimal', precision: 15, scale: 2, nullable: true })
   sourceBalanceAfter: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  @Column({ name: 'destination_balance_after', type: 'decimal', precision: 15, scale: 2, nullable: true })
   destinationBalanceAfter: number;
 
   @Column({ nullable: true })
@@ -42,9 +50,12 @@ export class Ledger {
   @Column({ nullable: true })
   reference: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'transaction_id', nullable: true })
   transactionId: number;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

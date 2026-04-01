@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { Organisation } from './organisation.entity';
 import { User } from './user.entity';
 import { Branch } from './branch.entity';
@@ -12,22 +12,24 @@ export class Group {
   name: string;
 
   @ManyToOne(() => Organisation)
+  @JoinColumn({ name: 'sub_org_id' })
   subOrg: Organisation;
 
-  @Column({ nullable: true })
+  @Column({ name: 'sub_org_id', nullable: true })
   subOrgId: number;
 
   @ManyToOne(() => Branch, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'branch_id' })
   branch: Branch;
 
-  @Column({ nullable: true })
+  @Column({ name: 'branch_id', nullable: true })
   branchId: number;
 
   @ManyToOne(() => User)
+  @JoinColumn({ name: 'leader_id' })
   leader: User;
 
-  @Column({ nullable: true })
+  @Column({ name: 'leader_id', nullable: true })
   leaderId: number;
 
   @Column({ nullable: true })
@@ -36,6 +38,9 @@ export class Group {
   @Column({ default: 'active' })
   status: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

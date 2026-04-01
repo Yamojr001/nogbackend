@@ -11,26 +11,26 @@ export class Member {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true, nullable: true })
-  membershipId: string; // e.g., NOG-MEM-2026-0001
+  @Column({ name: 'membership_id', unique: true, nullable: true })
+  membershipId: string; 
 
   @OneToOne(() => User)
-  @JoinColumn()
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ nullable: true })
+  @Column({ name: 'user_id', nullable: true })
   userId: number;
 
   @Column({ nullable: true })
   gender: string;
 
-  @Column({ nullable: true, type: 'date' })
+  @Column({ name: 'date_of_birth', nullable: true, type: 'date' })
   dateOfBirth: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'marital_status', nullable: true })
   maritalStatus: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'state_of_origin', nullable: true })
   stateOfOrigin: string;
 
   @Column({ nullable: true })
@@ -42,81 +42,82 @@ export class Member {
   @Column({ nullable: true })
   occupation: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'educational_qualification', nullable: true })
   educationalQualification: string;
 
   // Organizational Affiliation (External)
-  @Column({ nullable: true })
+  @Column({ name: 'ext_org_name', nullable: true })
   extOrgName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'ext_position', nullable: true })
   extPosition: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'ext_state_chapter', nullable: true })
   extStateChapter: string;
 
-  @Column({ default: 'pending' })
+  @Column({ name: 'kyc_status', default: 'pending' })
   kycStatus: string;
 
   @OneToOne(() => NextOfKin, nok => nok.member)
+  @JoinColumn({ name: 'next_of_kin_id' })
   nextOfKin: NextOfKin;
 
-  @Column({ nullable: true })
+  @Column({ name: 'next_of_kin_id', nullable: true })
   nextOfKinId: number;
 
   @OneToOne(() => Wallet)
-  @JoinColumn()
+  @JoinColumn({ name: 'wallet_id' })
   wallet: Wallet;
 
-  @Column({ nullable: true })
+  @Column({ name: 'wallet_id', nullable: true })
   walletId: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  @Column({ name: 'contribution_balance', type: 'decimal', precision: 15, scale: 2, default: 0 })
   contributionBalance: number;
 
-  @Column({ nullable: true })
-  savingsFrequency: string; // Daily, Weekly, Monthly
+  @Column({ name: 'savings_frequency', nullable: true })
+  savingsFrequency: string; 
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  @Column({ name: 'proposed_savings_amount', type: 'decimal', precision: 15, scale: 2, nullable: true })
   proposedSavingsAmount: number;
 
-  @Column({ nullable: true })
-  empowermentInterest: string; // Agriculture, ICT, etc.
+  @Column({ name: 'empowerment_interest', nullable: true })
+  empowermentInterest: string; 
 
-  @Column({ default: 'none' })
+  @Column({ name: 'loan_status', default: 'none' })
   loanStatus: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'joined_date' })
   joinedDate: Date;
 
   @ManyToOne(() => Branch, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'branch_id' })
   branch: Branch;
 
-  @Column({ nullable: true })
+  @Column({ name: 'branch_id', nullable: true })
   branchId: number;
 
   @ManyToOne(() => Group, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'group_id' })
   group: Group;
 
-  @Column({ nullable: true })
+  @Column({ name: 'group_id', nullable: true })
   groupId: number;
 
   @ManyToOne(() => Organisation)
-  @JoinColumn()
+  @JoinColumn({ name: 'organisation_id' })
   organisation: Organisation;
 
-  @Column({ nullable: true })
+  @Column({ name: 'organisation_id', nullable: true })
   organisationId: number;
 
-  @Column({ nullable: true })
+  @Column({ name: 'sub_org_id', nullable: true })
   subOrgId: number;
 
-  @Column({ default: false })
+  @Column({ name: 'is_registration_fee_paid', default: false })
   isRegistrationFeePaid: boolean;
 
-  @Column({ nullable: true })
+  @Column({ name: 'payment_reference', nullable: true })
   paymentReference: string;
 
   @Column({ default: 'active' })

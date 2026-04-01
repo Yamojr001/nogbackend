@@ -7,14 +7,14 @@ export enum OrganisationType {
   SUB_ORG = 'sub_org',
 }
 
-@Entity('organisation')
+@Entity('organizations')
 @Tree("adjacency-list")
 export class Organisation {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ unique: true, nullable: true })
-  code: string; // e.g., ORG-0001, SUB-0012, GRP-0345
+  code: string; 
 
   @Column()
   name: string;
@@ -31,8 +31,8 @@ export class Organisation {
   @Column({ nullable: true })
   phone: string;
 
-  @Column({ nullable: true })
-  regNumber: string; // CAC Registration Number
+  @Column({ name: 'registration_number', nullable: true })
+  regNumber: string;
 
   @Column({
     type: 'enum',
@@ -41,16 +41,16 @@ export class Organisation {
   })
   type: OrganisationType;
 
-  @Column({ nullable: true })
+  @Column({ name: 'hq_address', nullable: true })
   hqAddress: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'establishment_date', nullable: true })
   establishmentDate: Date;
 
-  @Column({ nullable: true })
-  orgTypeStr: string; // Cooperative, NGO, etc.
+  @Column({ name: 'org_type_str', nullable: true })
+  orgTypeStr: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'active_member_count', nullable: true })
   activeMemberCount: number;
 
   @Column({ nullable: true })
@@ -59,115 +59,115 @@ export class Organisation {
   @Column({ nullable: true })
   state: string;
 
-  @Column({ nullable: true, type: 'text' })
+  @Column({ name: 'operating_states', nullable: true, type: 'text' })
   operatingStates: string;
 
   // --- SECTION B & C: REPRESENTATIVE ---
-  @Column({ nullable: true })
+  @Column({ name: 'rep_name', nullable: true })
   repName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_position', nullable: true })
   repPosition: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_phone', nullable: true })
   repPhone: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_email', nullable: true })
   repEmail: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_gender', nullable: true })
   repGender: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_nationality', nullable: true })
   repNationality: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_state_of_origin', nullable: true })
   repStateOfOrigin: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_lga', nullable: true })
   repLga: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_nin', nullable: true })
   repNin: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_bvn', nullable: true })
   repBvn: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_id_type', nullable: true })
   repIdType: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_id_url', nullable: true })
   repIdUrl: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'rep_passport_url', nullable: true })
   repPassportUrl: string;
 
   // --- SECTION D: SAVINGS & ENGAGEMENT ---
-  @Column({ default: false })
+  @Column({ name: 'participate_in_savings', default: false })
   participateInSavings: boolean;
 
-  @Column({ nullable: true })
-  savingsFrequency: string; // Monthly, Quarterly, Annually
+  @Column({ name: 'savings_frequency', nullable: true })
+  savingsFrequency: string;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  @Column({ name: 'monthly_contribution_amount', type: 'decimal', precision: 15, scale: 2, default: 0 })
   monthlyContributionAmount: number;
 
-  @Column({ type: 'text', nullable: true })
-  areasOfParticipation: string; // JSON string: Loans, Training, etc.
+  @Column({ name: 'areas_of_participation', type: 'text', nullable: true })
+  areasOfParticipation: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'proposed_beneficiaries', nullable: true })
   proposedBeneficiaries: number;
 
   // --- SECTION E: ORG BANK DETAILS ---
-  @Column({ nullable: true })
+  @Column({ name: 'org_account_name', nullable: true })
   orgAccountName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'org_bank_name', nullable: true })
   orgBankName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'org_account_number', nullable: true })
   orgAccountNumber: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'org_bvn', nullable: true })
   orgBvn: string;
 
   @Column({ type: 'text', nullable: true })
-  signatories: string; // JSON string
+  signatories: string;
 
   // --- SECTION G: OFFICIAL USE ---
-  @Column({ nullable: true })
+  @Column({ name: 'official_zone', nullable: true })
   officialZone: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'received_by', nullable: true })
   receivedBy: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'official_remarks', type: 'text', nullable: true })
   officialRemarks: string;
 
-  @Column({ default: 'pending' })
+  @Column({ name: 'kyc_status', default: 'pending' })
   kycStatus: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'logo_url', nullable: true })
   logoUrl: string;
 
-  @Column({ default: 'active' })
+  @Column({ name: 'status', default: 'active' })
   status: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'representative_user_id', nullable: true })
   representativeUserId: number;
 
   @OneToOne(() => User)
-  @JoinColumn({ name: 'representativeUserId' })
+  @JoinColumn({ name: 'representative_user_id' })
   representative: User;
 
-  @Column({ nullable: true })
+  @Column({ name: 'bank_account_id', nullable: true })
   bankAccountId: number;
 
-  @Column({ nullable: true })
+  @Column({ name: 'parent_id', nullable: true })
   parentId: number;
 
   @TreeParent()
-  @JoinColumn({ name: 'parentId' })
+  @JoinColumn({ name: 'parent_id' })
   parent: Organisation;
 
   @TreeChildren()
@@ -176,9 +176,9 @@ export class Organisation {
   @OneToMany(() => User, user => user.organisation)
   users: User[];
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'created_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
   updatedAt: Date;
 }

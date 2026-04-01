@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from './user.entity';
 import { Organisation } from './organisation.entity';
 
@@ -10,7 +10,7 @@ export enum WalletType {
   SYSTEM = 'system',
 }
 
-@Entity()
+@Entity('wallets')
 export class Wallet {
   @PrimaryGeneratedColumn()
   id: number;
@@ -30,12 +30,15 @@ export class Wallet {
   @Column({ default: 'active' })
   status: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'owner_id', nullable: true })
   ownerId: number;
 
-  @Column({ type: 'enum', enum: WalletType, nullable: true })
+  @Column({ name: 'owner_type', type: 'enum', enum: WalletType, nullable: true })
   ownerType: WalletType;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

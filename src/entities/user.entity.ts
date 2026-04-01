@@ -23,15 +23,15 @@ export enum UserRole {
   APEX_ADMIN = 'apex_admin',
 }
 
-@Entity()
+@Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
+  @Column({ name: 'first_name', nullable: true })
   firstName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'last_name', nullable: true })
   lastName: string;
 
   @Column({ nullable: true })
@@ -46,7 +46,7 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'google_id', nullable: true })
   googleId: string;
 
   @Column({ default: 'pending' })
@@ -59,7 +59,7 @@ export class User {
   })
   role: UserRole;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ name: 'notification_settings', type: 'json', nullable: true })
   notificationSettings: {
     email: boolean;
     sms: boolean;
@@ -70,13 +70,17 @@ export class User {
   memberProfile: Member;
 
   @ManyToOne(() => Organisation, organisation => organisation.users)
+  @JoinColumn({ name: 'organisation_id' })
   organisation: Organisation;
 
+  @Column({ name: 'organisation_id', nullable: true })
+  organisationId: number;
+
   @ManyToOne(() => Branch, { nullable: true })
-  @JoinColumn()
+  @JoinColumn({ name: 'branch_id' })
   branch: Branch;
 
-  @Column({ nullable: true })
+  @Column({ name: 'branch_id', nullable: true })
   branchId: number;
 
   @OneToMany(() => Loan, loan => loan.member)
@@ -88,33 +92,33 @@ export class User {
   @Column({ nullable: true, transformer: new EncryptionTransformer() })
   bvn: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'refresh_token_hash', nullable: true })
   refreshTokenHash: string;
 
-  @Column({ default: false })
+  @Column({ name: 'needs_captcha', default: false })
   needsCaptcha: boolean;
 
-  @Column({ nullable: true })
+  @Column({ name: 'reset_token', nullable: true })
   resetToken: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'reset_token_expires', type: 'timestamp', nullable: true })
   resetTokenExpires: Date;
 
-  @Column({ default: false })
+  @Column({ name: 'is_verified', default: false })
   isVerified: boolean;
 
-  @Column({ nullable: true })
+  @Column({ name: 'paystack_customer_code', nullable: true })
   paystackCustomerCode: string;
 
-  @Column({ default: 0 })
+  @Column({ name: 'failed_login_attempts', default: 0 })
   failedLoginAttempts: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'lock_until', type: 'timestamp', nullable: true })
   lockUntil: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

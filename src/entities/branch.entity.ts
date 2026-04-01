@@ -29,21 +29,21 @@ export class Branch {
   email: string;
 
   @ManyToOne(() => Organisation)
-  @JoinColumn()
+  @JoinColumn({ name: 'organisation_id' })
   organisation: Organisation;
 
-  @Column({ nullable: true })
+  @Column({ name: 'organisation_id', nullable: true })
   organisationId: number;
 
   @Column({ default: 'active' }) // active | suspended | closed
   status: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'manager_id', nullable: true })
   managerId: number; // FK to User (Branch Manager)
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

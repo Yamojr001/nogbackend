@@ -6,25 +6,25 @@ export class UserTour {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ name: 'user_id' })
   userId: number;
-
+ 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
+  @JoinColumn({ name: 'user_id' })
   user: User;
-
-  @Column({ default: 'onboarding' })
+ 
+  @Column({ name: 'tour_type', default: 'onboarding' })
   tourType: string;
-
-  @Column({ default: false })
+ 
+  @Column({ name: 'is_completed', default: false })
   isCompleted: boolean;
-
-  @Column({ default: 0 })
+ 
+  @Column({ name: 'last_step', default: 0 })
   lastStep: number;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

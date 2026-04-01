@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from './user.entity';
 
 export enum ApprovalStatus {
@@ -14,21 +14,22 @@ export enum ApprovalType {
   TRANSFER = 'transfer',
 }
 
-@Entity()
+@Entity('approvals')
 export class Approval {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ name: 'request_type' })
   requestType: string;
 
-  @Column()
-  referenceId: number; // e.g., loan id
+  @Column({ name: 'reference_id' })
+  referenceId: number; 
 
   @ManyToOne(() => User)
+  @JoinColumn({ name: 'initiator_id' })
   initiator: User;
 
-  @Column()
+  @Column({ name: 'initiator_id' })
   initiatorId: number;
 
   @Column({
@@ -38,15 +39,18 @@ export class Approval {
   })
   status: ApprovalStatus;
 
-  @Column({ default: 1 })
+  @Column({ name: 'current_level', default: 1 })
   currentLevel: number; 
 
-  @Column({ default: 3 })
+  @Column({ name: 'total_levels', default: 3 })
   totalLevels: number;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @Column({ name: 'approved_at', type: 'timestamp', nullable: true })
   approvedAt: Date;
 }
