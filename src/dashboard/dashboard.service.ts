@@ -35,15 +35,21 @@ export class DashboardService {
       if (role === UserRole.SUPER_ADMIN || role === UserRole.APEX_ADMIN) {
         // Global view
         memberCount = await this.memberRepo.count();
-        const wallets = await this.walletRepo.find();
-        totalFunds = wallets.reduce((sum, w) => sum + Number(w.balance), 0);
+        
+        // Sum balances efficiently
+        const result = await this.walletRepo.createQueryBuilder('wallet')
+          .select('SUM(wallet.balance)', 'total')
+          .getRawOne();
+        totalFunds = Number(result?.total || 0);
+
         pendingCount = await this.approvalRepo.count({ where: { status: ApprovalStatus.PENDING } });
         
-        const loans = await this.txnRepo.createQueryBuilder('txn')
+        const loanResult = await this.txnRepo.createQueryBuilder('txn')
+          .select('SUM(txn.amount)', 'total')
           .where('txn.type = :type', { type: TransactionType.LOAN_DISBURSEMENT })
           .andWhere('txn.status = :status', { status: TransactionStatus.COMPLETED })
-          .getMany();
-        loanTotal = loans.reduce((sum, l) => sum + Number(l.amount), 0);
+          .getRawOne();
+        loanTotal = Number(loanResult?.total || 0);
       } else if (role === UserRole.PARTNER_ADMIN || role === UserRole.SUB_ORG_ADMIN) {
         // Organisation view
         memberCount = await this.memberRepo.count({ where: { organisationId } });
@@ -93,17 +99,17 @@ export class DashboardService {
       // Build monthly contribution totals from real transaction data
       const query = this.txnRepo
         .createQueryBuilder('txn')
-        .select("MONTH(txn.createdAt)", "month")
+        .select("EXTRACT(MONTH FROM txn.createdAt)", "month")
         .addSelect("SUM(txn.amount)", "total")
         .addSelect("txn.type", "type")
-        .where("YEAR(txn.createdAt) = :year", { year: currentYear })
+        .where("EXTRACT(YEAR FROM txn.createdAt) = :year", { year: currentYear })
         .andWhere("txn.status = 'completed'");
 
       if (role !== UserRole.SUPER_ADMIN && role !== UserRole.APEX_ADMIN) {
         query.andWhere("txn.organisationId = :organisationId", { organisationId });
       }
 
-      const txns = await query.groupBy("MONTH(txn.createdAt), txn.type").getRawMany();
+      const txns = await query.groupBy("EXTRACT(MONTH FROM txn.createdAt), txn.type").getRawMany();
 
       // Aggregate by month
       const byMonth: Record<number, { revenue: number; loans: number }> = {};

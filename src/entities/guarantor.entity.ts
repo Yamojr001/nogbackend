@@ -19,9 +19,9 @@ export class Guarantor {
   member: Member;
 
   @Column()
-  memberId: number; // The member acting as a guarantor
+  memberId: number;
 
-  @Column({ default: 'pending' }) // pending, accepted, rejected, cancelled
+  @Column({ default: 'pending' })
   status: string;
 
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })

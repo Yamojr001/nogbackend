@@ -15,6 +15,7 @@ import { Audit } from '../entities/audit.entity';
 import { Notification, NotificationType } from '../entities/notification.entity';
 import { PaystackConfigService } from './paystack-config.service';
 import { EmailService } from '../email/email.service';
+import { PaymentService } from './payment.service';
 
 @Injectable()
 export class VirtualAccountService {
@@ -30,6 +31,7 @@ export class VirtualAccountService {
     private readonly paystackConfig: PaystackConfigService,
     private readonly dataSource: DataSource,
     private readonly emailService: EmailService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   // ─── PUBLIC API ───────────────────────────────────────────────────────────
@@ -130,6 +132,14 @@ export class VirtualAccountService {
 
     if (alreadyProcessed) {
       this.logger.warn(`Duplicate webhook reference: ${paystackTxRef}`);
+      return;
+    }
+
+    // --- Check if this is a Registration Fee (metadata-based) ---
+    const metadata = data?.metadata;
+    if (metadata?.type === 'registration_fee' && metadata?.memberId) {
+      this.logger.log(`Detected registration fee payment for memberId: ${metadata.memberId}`);
+      await this.paymentService.handleRegistrationSuccess(Number(metadata.memberId), paystackTxRef);
       return;
     }
 

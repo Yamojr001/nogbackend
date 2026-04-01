@@ -12,9 +12,11 @@ import { Notification } from '../entities/notification.entity';
 
 import { PaystackConfigService } from './paystack-config.service';
 import { VirtualAccountService } from './virtual-account.service';
+import { PaymentService } from './payment.service';
 import { PaystackWebhookController } from './paystack-webhook.controller';
 import { VirtualAccountController, PaymentSettingsController } from './virtual-account.controller';
 import { EmailModule } from '../email/email.module';
+import { Member } from '../entities/member.entity';
 
 @Module({
   imports: [
@@ -27,12 +29,14 @@ import { EmailModule } from '../email/email.module';
       Ledger,
       Audit,
       Notification,
+      Member,
     ]),
     EmailModule,
   ],
   providers: [
     PaystackConfigService,
     VirtualAccountService,
+    PaymentService,
   ],
   controllers: [
     PaystackWebhookController,
@@ -42,6 +46,7 @@ import { EmailModule } from '../email/email.module';
   exports: [
     PaystackConfigService,
     VirtualAccountService,
+    PaymentService,
   ],
 })
 export class PaystackModule {}

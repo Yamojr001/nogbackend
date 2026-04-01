@@ -113,8 +113,11 @@ export class Member {
   @Column({ nullable: true })
   subOrgId: number;
 
+  @Column({ default: false })
+  isRegistrationFeePaid: boolean;
+
   @Column({ nullable: true })
-  registrationOfficerId: number;
+  paymentReference: string;
 
   @Column({ default: 'active' })
   status: string;

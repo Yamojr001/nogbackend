@@ -1,11 +1,15 @@
 import { Controller, Request, Post, Get, UseGuards, Body, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { PaymentService } from '../paystack/payment.service';
 import { LocalAuthGuard } from './local-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(
+    private authService: AuthService,
+    private paymentService: PaymentService,
+  ) { }
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
@@ -38,6 +42,12 @@ export class AuthController {
   @Post('register')
   async register(@Body() dto: any) {
     return this.authService.register(dto);
+  }
+
+  @Post('register/initialize-payment')
+  @UseGuards(JwtAuthGuard)
+  async initializePayment(@Request() req: any) {
+    return this.paymentService.initializeRegistrationPayment(req.user.userId);
   }
 
   @Post('refresh')

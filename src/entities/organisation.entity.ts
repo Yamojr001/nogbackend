@@ -45,6 +45,15 @@ export class Organisation {
   hqAddress: string;
 
   @Column({ nullable: true })
+  establishmentDate: Date;
+
+  @Column({ nullable: true })
+  orgTypeStr: string; // Cooperative, NGO, etc.
+
+  @Column({ nullable: true })
+  activeMemberCount: number;
+
+  @Column({ nullable: true })
   country: string;
 
   @Column({ nullable: true })
@@ -52,6 +61,88 @@ export class Organisation {
 
   @Column({ nullable: true, type: 'text' })
   operatingStates: string;
+
+  // --- SECTION B & C: REPRESENTATIVE ---
+  @Column({ nullable: true })
+  repName: string;
+
+  @Column({ nullable: true })
+  repPosition: string;
+
+  @Column({ nullable: true })
+  repPhone: string;
+
+  @Column({ nullable: true })
+  repEmail: string;
+
+  @Column({ nullable: true })
+  repGender: string;
+
+  @Column({ nullable: true })
+  repNationality: string;
+
+  @Column({ nullable: true })
+  repStateOfOrigin: string;
+
+  @Column({ nullable: true })
+  repLga: string;
+
+  @Column({ nullable: true })
+  repNin: string;
+
+  @Column({ nullable: true })
+  repBvn: string;
+
+  @Column({ nullable: true })
+  repIdType: string;
+
+  @Column({ nullable: true })
+  repIdUrl: string;
+
+  @Column({ nullable: true })
+  repPassportUrl: string;
+
+  // --- SECTION D: SAVINGS & ENGAGEMENT ---
+  @Column({ default: false })
+  participateInSavings: boolean;
+
+  @Column({ nullable: true })
+  savingsFrequency: string; // Monthly, Quarterly, Annually
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  monthlyContributionAmount: number;
+
+  @Column({ type: 'text', nullable: true })
+  areasOfParticipation: string; // JSON string: Loans, Training, etc.
+
+  @Column({ nullable: true })
+  proposedBeneficiaries: number;
+
+  // --- SECTION E: ORG BANK DETAILS ---
+  @Column({ nullable: true })
+  orgAccountName: string;
+
+  @Column({ nullable: true })
+  orgBankName: string;
+
+  @Column({ nullable: true })
+  orgAccountNumber: string;
+
+  @Column({ nullable: true })
+  orgBvn: string;
+
+  @Column({ type: 'text', nullable: true })
+  signatories: string; // JSON string
+
+  // --- SECTION G: OFFICIAL USE ---
+  @Column({ nullable: true })
+  officialZone: string;
+
+  @Column({ nullable: true })
+  receivedBy: string;
+
+  @Column({ type: 'text', nullable: true })
+  officialRemarks: string;
 
   @Column({ default: 'pending' })
   kycStatus: string;
