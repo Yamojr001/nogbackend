@@ -73,6 +73,8 @@ import { EmpowermentModule } from './empowerment/empowerment.module';
 import { PaystackModule } from './paystack/paystack.module';
 import { VirtualAccount } from './entities/virtual-account.entity';
 import { SupportModule } from './support/support.module';
+import { BanksModule } from './banks/banks.module';
+import { Bank } from './entities/bank.entity';
 
 @Module({
   imports: [
@@ -109,7 +111,7 @@ import { SupportModule } from './support/support.module';
             Collection, BranchTarget, BranchExpense,
             Attendance, Meeting, SupportTicket, Guarantor, Beneficiary, EmailLog, OtpCode, SmsLog, UserTour,
             BankAccount, NextOfKin, EmpowermentProgram, ProgramApplication,
-            VirtualAccount
+            VirtualAccount, Bank
           ],
           synchronize,
           ssl: config.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
@@ -143,6 +145,7 @@ import { SupportModule } from './support/support.module';
     EmpowermentModule,
     PaystackModule,
     SupportModule,
+    BanksModule,
   ],
   providers: [
     {
