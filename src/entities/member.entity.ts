@@ -83,7 +83,7 @@ export class Member {
   @Column({ nullable: true })
   empowermentInterest: string; // Agriculture, ICT, etc.
 
-  @Column({ default: 'none' }) 
+  @Column({ default: 'none' })
   loanStatus: string;
 
   @CreateDateColumn()
@@ -111,7 +111,7 @@ export class Member {
   organisationId: number;
 
   @Column({ nullable: true })
-  subOrgId: number; // For direct hierarchy tracking
+  subOrgId: number;
 
   @Column({ nullable: true })
   registrationOfficerId: number;
