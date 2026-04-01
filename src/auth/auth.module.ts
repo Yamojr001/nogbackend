@@ -18,6 +18,7 @@ import { SecurityService } from './security.service';
 import { NotificationModule } from '../notification/notification.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { ApprovalModule } from '../approval/approval.module';
+import { PaystackModule } from '../paystack/paystack.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ApprovalModule } from '../approval/approval.module';
     NotificationModule,
     forwardRef(() => WalletModule),
     forwardRef(() => ApprovalModule),
+    PaystackModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
