@@ -32,7 +32,7 @@ export class Branch {
   @JoinColumn()
   organisation: Organisation;
 
-  @Column()
+  @Column({ nullable: true })
   organisationId: number;
 
   @Column({ default: 'active' }) // active | suspended | closed
