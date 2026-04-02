@@ -533,17 +533,13 @@ export class AuthService {
     }
 
     if (savedUser.role === UserRole.MEMBER) {
-      try {
-        const payRes = await this.paymentService.initializeRegistrationPayment(savedUser.id);
-        return {
-          status: 'success',
-          needsPayment: true,
-          paymentUrl: payRes.data.authorization_url,
-          message: 'Registration successful. Please complete payment to activate your account.',
-        };
-      } catch (payErr) {
-        console.error('[Auth] Payment initialization failed during registration:', payErr.message);
-      }
+      const payRes = await this.paymentService.initializeRegistrationPayment(savedUser.id);
+      return {
+        status: 'success',
+        needsPayment: true,
+        paymentUrl: payRes.data.authorization_url,
+        message: 'Registration successful. Please complete payment to activate your account.',
+      };
     }
 
     return this.login(savedUser);
