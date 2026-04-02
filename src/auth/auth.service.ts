@@ -550,7 +550,7 @@ export class AuthService {
   async getPublicGroups(subOrgId: number) {
     return this.dataSource.getRepository(Group).find({
       select: ['id', 'name'],
-      where: { subOrg: { id: subOrgId } as any, status: 'active' as any }
+      where: { organisation: { id: subOrgId } as any, status: 'active' as any }
     });
   }
 }
