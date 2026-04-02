@@ -70,10 +70,10 @@ export class User {
   memberProfile: Member;
 
   @ManyToOne(() => Organisation, organisation => organisation.users)
-  @JoinColumn({ name: 'organisation_id' })
+  @JoinColumn({ name: 'organization_id' })
   organisation: Organisation;
 
-  @Column({ name: 'organisation_id', nullable: true })
+  @Column({ name: 'organization_id', nullable: true })
   organisationId: number;
 
   @ManyToOne(() => Branch, { nullable: true })

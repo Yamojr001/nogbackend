@@ -105,10 +105,10 @@ export class Member {
   groupId: number;
 
   @ManyToOne(() => Organisation)
-  @JoinColumn({ name: 'organisation_id' })
+  @JoinColumn({ name: 'organization_id' })
   organisation: Organisation;
 
-  @Column({ name: 'organisation_id', nullable: true })
+  @Column({ name: 'organization_id', nullable: true })
   organisationId: number;
 
   @Column({ name: 'sub_org_id', nullable: true })

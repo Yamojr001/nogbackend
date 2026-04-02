@@ -12,11 +12,11 @@ export class Group {
   name: string;
 
   @ManyToOne(() => Organisation)
-  @JoinColumn({ name: 'sub_org_id' })
-  subOrg: Organisation;
+  @JoinColumn({ name: 'organisation_id' })
+  organisation: Organisation;
 
-  @Column({ name: 'sub_org_id', nullable: true })
-  subOrgId: number;
+  @Column({ name: 'organisation_id', nullable: true })
+  organisationId: number;
 
   @ManyToOne(() => Branch, { nullable: true })
   @JoinColumn({ name: 'branch_id' })

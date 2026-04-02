@@ -9,9 +9,9 @@ async function run() {
   await client.connect();
   console.log('Connected to DB');
   try {
-    const res = await client.query(`SELECT * FROM members LIMIT 0`);
-    console.log('Columns in members:');
-    res.fields.forEach(f => console.log(` - ${f.name}`));
+    const res1 = await client.query(`SELECT * FROM wallets LIMIT 0`);
+    console.log('\nColumns in wallets:');
+    res1.fields.forEach(f => console.log(` - ${f.name}`));
   } catch (err) {
     console.error('Error listing columns:', err.message);
   } finally {

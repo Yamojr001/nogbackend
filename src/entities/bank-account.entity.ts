@@ -11,32 +11,32 @@ export class BankAccount {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ name: 'owner_id' })
   @Index()
   ownerId: number;
 
-  @Column({ type: 'enum', enum: OwnerType })
+  @Column({ name: 'owner_type', type: 'enum', enum: OwnerType })
   @Index()
   ownerType: OwnerType;
 
-  @Column()
+  @Column({ name: 'account_name' })
   accountName: string;
 
-  @Column()
+  @Column({ name: 'bank_name' })
   bankName: string;
 
-  @Column()
+  @Column({ name: 'account_number' })
   accountNumber: string;
 
   @Column({ nullable: true, transformer: new EncryptionTransformer() })
   bvn: string; // To be encrypted
 
-  @Column({ default: false })
+  @Column({ name: 'is_verified', default: false })
   isVerified: boolean;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

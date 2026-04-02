@@ -46,6 +46,9 @@ BEGIN
     BEGIN ALTER TABLE "organizations" ADD COLUMN "org_type_str" character varying; EXCEPTION WHEN duplicate_column THEN END;
     BEGIN ALTER TABLE "organizations" ADD COLUMN "active_member_count" integer; EXCEPTION WHEN duplicate_column THEN END;
     BEGIN ALTER TABLE "organizations" ADD COLUMN "establishment_date" TIMESTAMP; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE "organizations" ADD COLUMN "parent_id" integer; EXCEPTION WHEN duplicate_column THEN END;
+    -- Optional but helpful for tree speed
+    BEGIN ALTER TABLE "organizations" ADD COLUMN "mpath" character varying; EXCEPTION WHEN duplicate_column THEN END;
 END $$;
 `;
 

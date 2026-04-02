@@ -9,13 +9,13 @@ async function run() {
   await client.connect();
   console.log('Connected to DB');
   try {
-    const resTxn = await client.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'transactions'`);
-    console.log('Columns in transactions:');
-    resTxn.rows.forEach(row => console.log(` - ${row.column_name} (${row.data_type})`));
-    
-    const resLedger = await client.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'ledgers'`);
-    console.log('\nColumns in ledgers:');
-    resLedger.rows.forEach(row => console.log(` - ${row.column_name} (${row.data_type})`));
+    const res1 = await client.query(`SELECT * FROM bank_accounts LIMIT 0`);
+    console.log('\nColumns in bank_accounts:');
+    res1.fields.forEach(f => console.log(` - ${f.name}`));
+
+    const res2 = await client.query(`SELECT * FROM next_of_kin LIMIT 0`);
+    console.log('\nColumns in next_of_kin:');
+    res2.fields.forEach(f => console.log(` - ${f.name}`));
   } catch (err) {
     console.error('Error listing columns:', err.message);
   } finally {

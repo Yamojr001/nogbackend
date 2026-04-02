@@ -7,10 +7,10 @@ export class NextOfKin {
   id: number;
 
   @OneToOne(() => Member, member => member.nextOfKin)
-  @JoinColumn()
+  @JoinColumn({ name: 'member_id' })
   member: Member;
 
-  @Column()
+  @Column({ name: 'member_id' })
   memberId: number;
 
   @Column()
@@ -28,9 +28,9 @@ export class NextOfKin {
   @Column({ nullable: true })
   email: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
