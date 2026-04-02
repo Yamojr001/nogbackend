@@ -23,6 +23,7 @@ import { EncryptionService } from '../common/encryption.service';
 import { ApprovalEngineService } from '../approval/approval-engine.service';
 import { NextOfKin } from '../entities/next-of-kin.entity';
 import { BankAccount, OwnerType } from '../entities/bank-account.entity';
+import { PaymentService } from '../paystack/payment.service';
 
 @Injectable()
 export class AuthService {
@@ -235,6 +236,7 @@ export class AuthService {
     private securityService: SecurityService,
     private encryptionService: EncryptionService,
     private approvalEngine: ApprovalEngineService,
+    private paymentService: PaymentService,
   ) {}
 
   private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -528,6 +530,20 @@ export class AuthService {
       ).catch(e => console.error('[Auth] Verification email failed:', e.message));
     } catch (postErr) {
       console.error('[Auth] Registration post-processing error:', postErr.message);
+    }
+
+    if (savedUser.role === UserRole.MEMBER) {
+      try {
+        const payRes = await this.paymentService.initializeRegistrationPayment(savedUser.id);
+        return {
+          status: 'success',
+          needsPayment: true,
+          paymentUrl: payRes.data.authorization_url,
+          message: 'Registration successful. Please complete payment to activate your account.',
+        };
+      } catch (payErr) {
+        console.error('[Auth] Payment initialization failed during registration:', payErr.message);
+      }
     }
 
     return this.login(savedUser);
