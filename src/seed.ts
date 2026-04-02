@@ -156,7 +156,7 @@ async function run() {
     if (!group) {
       group = groupRepo.create({
         name: 'Farmers Prosperity Group',
-        subOrgId: subOrg.id,
+        organisationId: subOrg.id,
         category: 'Agricultural',
         status: 'active'
       });
@@ -308,7 +308,7 @@ async function run() {
       if (!subGroup) {
         subGroup = groupRepo.create({
           name: 'Abuja Cooperative Cell 1',
-          subOrgId: partner.id,
+          organisationId: partner.id,
           branchId: abujaBranch.id,
           category: 'General',
           status: 'active'
