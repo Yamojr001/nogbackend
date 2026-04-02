@@ -13,6 +13,24 @@ async function run() {
     console.log('\nTables in DB:');
     tableRes.rows.forEach(r => console.log(` - ${r.table_name}`));
 
+    const resUserBefore = await client.query(`SELECT * FROM users LIMIT 0`);
+    console.log('\nColumns in users (Before):');
+    resUserBefore.fields.forEach(f => console.log(` - ${f.name}`));
+
+    console.log('Adding missing columns to users table...');
+    await client.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS refresh_token_hash TEXT,
+      ADD COLUMN IF NOT EXISTS needs_captcha BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS reset_token TEXT,
+      ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP
+    `);
+    console.log('Missing columns added.');
+    
+    const resUserAfter = await client.query(`SELECT * FROM users LIMIT 0`);
+    console.log('\nColumns in users (After):');
+    resUserAfter.fields.forEach(f => console.log(` - ${f.name}`));
+
     if (!tableRes.rows.some(r => r.table_name === 'system_config')) {
       console.log('Creating system_config table...');
       await client.query(`

@@ -114,6 +114,9 @@ export class Member {
   @Column({ name: 'sub_org_id', nullable: true })
   subOrgId: number;
 
+  @Column({ name: 'registration_officer_id', nullable: true })
+  registrationOfficerId: number;
+
   @Column({ name: 'is_registration_fee_paid', default: false })
   isRegistrationFeePaid: boolean;
 
@@ -122,4 +125,10 @@ export class Member {
 
   @Column({ default: 'active' })
   status: string;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @Column({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
 }
