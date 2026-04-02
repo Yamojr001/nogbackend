@@ -86,13 +86,13 @@ export class NotificationService {
   }
 
   async markAsRead(notificationId: number) {
-    await this.notificationRepository.update(notificationId, { isRead: true });
+    await this.notificationRepository.update(notificationId, { readAt: new Date() });
     return this.notificationRepository.findOne({ where: { id: notificationId } });
   }
 
   async getUnreadCount(userId: number): Promise<number> {
     return this.notificationRepository.count({
-      where: { userId, type: NotificationType.IN_APP, isRead: false },
+      where: { userId, type: NotificationType.IN_APP, readAt: null as any },
     });
   }
 }

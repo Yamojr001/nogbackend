@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
 
 export enum NotificationType {
@@ -20,9 +20,10 @@ export class Notification {
   id: number;
 
   @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column()
+  @Column({ name: 'user_id' })
   userId: number;
 
   @Column({ nullable: true })
@@ -44,12 +45,15 @@ export class Notification {
   })
   status: NotificationStatus;
 
-  @Column({ default: false })
-  isRead: boolean;
+  @Column({ name: 'read_at', nullable: true })
+  readAt: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
+
+  @Column({ name: 'sent_at', nullable: true })
   sentAt: Date;
 }

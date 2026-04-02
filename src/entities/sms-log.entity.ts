@@ -11,7 +11,7 @@ export class SmsLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ name: 'phone_number' })
   phoneNumber: string;
 
   @Column('text')
@@ -27,12 +27,15 @@ export class SmsLog {
   @Column({ nullable: true })
   provider: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'provider_response', nullable: true })
   providerResponse: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
+
+  @Column({ name: 'sent_at', nullable: true })
   sentAt: Date;
 }

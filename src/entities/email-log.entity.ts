@@ -12,10 +12,10 @@ export class EmailLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ name: 'recipient_email' })
   recipientEmail: string;
 
-  @Column()
+  @Column({ name: 'email_type' })
   emailType: string;
 
   @Column({
@@ -31,18 +31,19 @@ export class EmailLog {
   @Column({ type: 'json', nullable: true })
   context: any;
 
-  @Column({ nullable: true })
+  @Column({ name: 'sent_at', nullable: true })
   sentAt: Date;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string;
 
   @Column({ default: 0 })
   attempts: number;
 
-  @CreateDateColumn()
+
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

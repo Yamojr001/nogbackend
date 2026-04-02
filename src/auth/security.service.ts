@@ -19,7 +19,7 @@ export class SecurityService {
     // 1. Check if this IP/UA has logged in before for this user
     const previous = await this.auditRepository.findOne({
       where: { userId, action: 'USER_LOGIN' },
-      order: { timestamp: 'DESC' }
+      order: { createdAt: 'DESC' }
     });
 
     // Device detection via metadata
