@@ -107,6 +107,53 @@ export class AuthService {
     }
   }
 
+  private async insertWalletCompat(
+    queryRunner: any,
+    walletData: {
+      type: WalletType;
+      balance: number;
+      currency: string;
+      status: string;
+      ownerId: number;
+      ownerType: WalletType;
+    },
+  ): Promise<number> {
+    const columnRows = await queryRunner.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_name = 'wallets'`,
+    );
+
+    const availableColumns = new Set(columnRows.map((row: any) => row.column_name));
+    const insertColumns: string[] = [];
+    const insertValues: any[] = [];
+
+    const candidates: Array<[string, any]> = [
+      ['type', walletData.type],
+      ['balance', walletData.balance],
+      ['currency', walletData.currency],
+      ['status', walletData.status],
+      ['owner_id', walletData.ownerId],
+      ['owner_type', walletData.ownerType],
+    ];
+
+    for (const [column, value] of candidates) {
+      if (availableColumns.has(column)) {
+        insertColumns.push(column);
+        insertValues.push(value);
+      }
+    }
+
+    if (!insertColumns.length) {
+      throw new Error('No compatible wallet columns found');
+    }
+
+    const placeholders = insertColumns.map((_, index) => `$${index + 1}`).join(', ');
+    const sql = `INSERT INTO wallets (${insertColumns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
+    const rows = await queryRunner.query(sql, insertValues);
+    return rows[0]?.id;
+  }
+
   private validatePasswordStrength(password: string): boolean {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
@@ -322,14 +369,14 @@ export class AuthService {
       const savedUser = await queryRunner.manager.save(user);
 
       // 5. Create Wallet
-      const wallet = queryRunner.manager.create(Wallet, {
+      const savedWalletId = await this.insertWalletCompat(queryRunner, {
         type: WalletType.MEMBER,
         balance: 0,
         currency: 'NGN',
+        status: 'active',
         ownerId: savedUser.id,
         ownerType: WalletType.MEMBER,
       });
-      const savedWallet = await queryRunner.manager.save(wallet);
 
       // 6. Create Bank Account
       if (dto.accountNumber) {
@@ -348,8 +395,7 @@ export class AuthService {
       const member = queryRunner.manager.create(Member, {
         user: savedUser,
         userId: savedUser.id,
-        wallet: savedWallet,
-        walletId: savedWallet.id,
+        walletId: savedWalletId,
         organisationId: organisationId,
         subOrgId: dto.subOrgId,
         groupId: dto.groupId,
