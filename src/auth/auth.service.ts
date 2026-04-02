@@ -169,6 +169,8 @@ export class AuthService {
     const insertValues: any[] = [];
 
     const candidates: Array<[string, any]> = [
+      ['membership_number', memberData.membershipNumber],
+      ['membership_id', memberData.membershipNumber],
       ['user_id', memberData.userId],
       ['wallet_id', memberData.walletId],
       ['organization_id', memberData.organisationId],
@@ -195,13 +197,9 @@ export class AuthService {
     ];
 
     for (const [column, value] of candidates) {
-      if (availableColumns.has(column) && value !== undefined && value !== null) {
+      if (availableColumns.has(column) && value !== undefined) {
         insertColumns.push(column);
         insertValues.push(value);
-      } else if (availableColumns.has(column)) {
-        // Include nullable columns even if null to maintain schema consistency
-        insertColumns.push(column);
-        insertValues.push(null);
       }
     }
 
@@ -453,7 +451,9 @@ export class AuthService {
       }
 
       // 7. Create Member Profile (schema-aware insert for legacy DBs)
+      const membershipNumber = `NOG-${new Date().getFullYear()}-${savedUser.id}-${Math.floor(Math.random() * 9000) + 1000}`;
       const savedMemberId = await this.insertMemberCompat(queryRunner, {
+        membershipNumber,
         userId: savedUser.id,
         walletId: savedWalletId,
         organisationId: organisationId,
