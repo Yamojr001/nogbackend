@@ -236,9 +236,43 @@ export class AuthService {
     const { email, password, firstName, lastName, phone, role } = dto;
     let { organisationId, organisationCode } = dto;
 
+    const normalizedRole = (() => {
+      if (!role) return UserRole.MEMBER;
+      const candidate = String(role).toLowerCase();
+      return (Object.values(UserRole) as string[]).includes(candidate)
+        ? (candidate as UserRole)
+        : null;
+    })();
+
+    if (!normalizedRole) {
+      throw new UnauthorizedException('Invalid role provided');
+    }
+
     // 1. Resolve Organisation if code provided
-    if (organisationCode && !organisationId) {
-      const org = await this.dataSource.getRepository(Organisation).findOne({ where: { code: organisationCode } });
+    let org: Organisation | null = null;
+    if (organisationCode) {
+      try {
+        org = await this.dataSource.getRepository(Organisation).findOne({
+          where: { code: organisationCode },
+          // Select only columns needed for registration to support older DB schemas.
+          select: ['id', 'code', 'name'] as (keyof Organisation)[],
+        });
+      } catch (error) {
+        if (!this.isMissingColumnError(error)) {
+          throw error;
+        }
+
+        const rows = await this.dataSource.query(
+          `SELECT id, code, name
+           FROM organizations
+           WHERE code = $1
+           LIMIT 1`,
+          [organisationCode],
+        );
+
+        org = rows.length ? ({ id: rows[0].id, code: rows[0].code, name: rows[0].name } as Organisation) : null;
+      }
+
       if (!org) throw new UnauthorizedException('Invalid organisation code');
       organisationId = org.id;
     }
@@ -266,9 +300,6 @@ export class AuthService {
 
     // 2. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-        console.log(`[Register] Resolving org code: ${organisationCode}`);
-        const org = await this.dataSource.getRepository(Organisation).findOne({ where: { code: organisationCode } });
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -282,7 +313,7 @@ export class AuthService {
         lastName,
         name: `${firstName} ${lastName}`,
         phone,
-        role: role || UserRole.MEMBER,
+        role: normalizedRole,
         organisation: { id: organisationId } as Organisation,
         status: 'pending', // Explicitly pending
         nin: dto.nin,

@@ -41,7 +41,7 @@ async function bootstrap() {
     });
 
     await app.listen(5000);
-    console.log(`🚀 Coop-OS API running on http://localhost:5000/api`);
+    console.log(`🚀 Coop-OS API running on https://nogbackend.vercel.app/api`);
   } catch (error) {
     const util = require('util');
     console.error('NestJS Bootstrap Error:');

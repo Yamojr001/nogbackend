@@ -38,7 +38,7 @@ export class PaymentService {
     try {
       const response = await this.paystackConfig.request<any>('POST', '/transaction/initialize', {
         email: user.email,
-        amount: this.REGISTRATION_FEE * 100, // Kobo
+        amount: this.REGISTRATION_FEE * 100,
         callback_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/register/payment-success`,
         metadata: {
           userId: user.id,
