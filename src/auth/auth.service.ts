@@ -393,7 +393,7 @@ export class AuthService {
       throw new UnauthorizedException('Email already registered');
     }
 
-    // Phase 7: Block temporary email domains
+    // Block temporary email domains
     const disposableDomains = ['mailinator.com', 'guerrillamail.com', 'tempmail.com', '10minutemail.com'];
     const emailDomain = email.split('@')[1];
     if (disposableDomains.includes(emailDomain)) {
@@ -404,11 +404,14 @@ export class AuthService {
       throw new UnauthorizedException('Password is too weak. Must be 8+ chars with uppercase, lowercase, number, and special character.');
     }
 
-    // 2. Hash password
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
+    let savedUser: User;
+    let savedMemberId: number;
 
     try {
       // 4. Create User
@@ -421,11 +424,11 @@ export class AuthService {
         phone,
         role: normalizedRole,
         organisation: { id: organisationId } as Organisation,
-        status: 'pending', // Explicitly pending
+        status: 'pending',
         nin: dto.nin,
         bvn: dto.bvn,
       });
-      const savedUser = await queryRunner.manager.save(user);
+      savedUser = await queryRunner.manager.save(user);
 
       // 5. Create Wallet
       const savedWalletId = await this.insertWalletCompat(queryRunner, {
@@ -450,9 +453,9 @@ export class AuthService {
         await queryRunner.manager.save(bankAcc);
       }
 
-      // 7. Create Member Profile (schema-aware insert for legacy DBs)
+      // 7. Create Member Profile
       const membershipNumber = `NOG-${new Date().getFullYear()}-${savedUser.id}-${Math.floor(Math.random() * 9000) + 1000}`;
-      const savedMemberId = await this.insertMemberCompat(queryRunner, {
+      savedMemberId = await this.insertMemberCompat(queryRunner, {
         membershipNumber,
         userId: savedUser.id,
         walletId: savedWalletId,
@@ -492,41 +495,42 @@ export class AuthService {
       }
 
       await queryRunner.commitTransaction();
+    } catch (err) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
 
+    // --- Post-Transaction Logic ---
+    try {
       // Initiate Approval Workflow
       if (savedUser.role === UserRole.MEMBER) {
         await this.approvalEngine.process('member_registration', savedMemberId, savedUser.id);
       }
 
-      // â”€â”€â”€ Trigger Emails â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      try {
-        // 1. Welcome / Confirmation
-        await this.notificationService.trigger(
-          savedUser.id,
-          'Welcome to Coop-OS',
-          `Welcome ${savedUser.firstName}! Your registration for NOGALSS Cooperative is ${savedUser.status}.`,
-          [NotificationType.EMAIL, NotificationType.IN_APP]
-        );
+      // Trigger Emails
+      await this.notificationService.trigger(
+        savedUser.id,
+        'Welcome to Coop-OS',
+        `Welcome ${savedUser.firstName}! Your registration for NOGALSS Cooperative is ${savedUser.status}.`,
+        [NotificationType.EMAIL, NotificationType.IN_APP]
+      ).catch(e => console.error('[Auth] Welcome email failed:', e.message));
 
-        // 2. Verification Email (In a real app, generate a token first)
-        const verificationToken = 'dummy-token-' + Math.random().toString(36).substr(2, 9);
-        await this.notificationService.trigger(
-          savedUser.id,
-          'Verify Your Email - Coop-OS',
-          `Please verify your email to fully activate your account. link: https://nogalss.org/verify-email?token=${verificationToken}`,
-          [NotificationType.EMAIL]
-        );
-      } catch (emailErr) {
-        console.error('Failed to queue registration emails:', emailErr.message);
-      }
-
-      return this.login(savedUser);
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw err;
-    } finally {
-      await queryRunner.release();
+      const verificationToken = 'dummy-token-' + Math.random().toString(36).substr(2, 9);
+      await this.notificationService.trigger(
+        savedUser.id,
+        'Verify Your Email - Coop-OS',
+        `Please verify your email to fully activate your account. link: https://nogalss.org/verify-email?token=${verificationToken}`,
+        [NotificationType.EMAIL]
+      ).catch(e => console.error('[Auth] Verification email failed:', e.message));
+    } catch (postErr) {
+      console.error('[Auth] Registration post-processing error:', postErr.message);
     }
+
+    return this.login(savedUser);
   }
 
   async validateUser(email: string, password: string): Promise<any> {
