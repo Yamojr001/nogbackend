@@ -154,6 +154,67 @@ export class AuthService {
     return rows[0]?.id;
   }
 
+  private async insertMemberCompat(
+    queryRunner: any,
+    memberData: any,
+  ): Promise<number> {
+    const columnRows = await queryRunner.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_name = 'members'`,
+    );
+
+    const availableColumns = new Set(columnRows.map((row: any) => row.column_name));
+    const insertColumns: string[] = [];
+    const insertValues: any[] = [];
+
+    const candidates: Array<[string, any]> = [
+      ['user_id', memberData.userId],
+      ['wallet_id', memberData.walletId],
+      ['organization_id', memberData.organisationId],
+      ['sub_org_id', memberData.subOrgId],
+      ['group_id', memberData.groupId],
+      ['branch_id', memberData.branchId],
+      ['registration_officer_id', memberData.registrationOfficerId],
+      ['gender', memberData.gender],
+      ['date_of_birth', memberData.dateOfBirth],
+      ['marital_status', memberData.maritalStatus],
+      ['state_of_origin', memberData.stateOfOrigin],
+      ['nationality', memberData.nationality],
+      ['address', memberData.address],
+      ['occupation', memberData.occupation],
+      ['educational_qualification', memberData.educationalQualification],
+      ['ext_org_name', memberData.extOrgName],
+      ['ext_position', memberData.extPosition],
+      ['ext_state_chapter', memberData.extStateChapter],
+      ['savings_frequency', memberData.savingsFrequency],
+      ['proposed_savings_amount', memberData.proposedSavingsAmount],
+      ['empowerment_interest', memberData.empowermentInterest],
+      ['kyc_status', memberData.kycStatus || 'pending'],
+      ['status', memberData.status || 'pending'],
+    ];
+
+    for (const [column, value] of candidates) {
+      if (availableColumns.has(column) && value !== undefined && value !== null) {
+        insertColumns.push(column);
+        insertValues.push(value);
+      } else if (availableColumns.has(column)) {
+        // Include nullable columns even if null to maintain schema consistency
+        insertColumns.push(column);
+        insertValues.push(null);
+      }
+    }
+
+    if (!insertColumns.includes('user_id')) {
+      throw new Error('user_id column required in members table');
+    }
+
+    const placeholders = insertColumns.map((_, index) => `$${index + 1}`).join(', ');
+    const sql = `INSERT INTO members (${insertColumns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
+    const rows = await queryRunner.query(sql, insertValues);
+    return rows[0]?.id;
+  }
+
   private validatePasswordStrength(password: string): boolean {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
@@ -391,9 +452,8 @@ export class AuthService {
         await queryRunner.manager.save(bankAcc);
       }
 
-      // 7. Create Member Profile
-      const member = queryRunner.manager.create(Member, {
-        user: savedUser,
+      // 7. Create Member Profile (schema-aware insert for legacy DBs)
+      const savedMemberId = await this.insertMemberCompat(queryRunner, {
         userId: savedUser.id,
         walletId: savedWalletId,
         organisationId: organisationId,
@@ -417,13 +477,12 @@ export class AuthService {
         empowermentInterest: dto.empowermentInterest,
         kycStatus: 'pending',
         status: 'pending',
-      } as any);
-      const savedMember = await queryRunner.manager.save(member);
+      });
 
       // 8. Create Next of Kin
       if (dto.nokName) {
         const nok = queryRunner.manager.create(NextOfKin, {
-          memberId: savedMember.id,
+          memberId: savedMemberId,
           name: dto.nokName,
           relationship: dto.nokRelationship,
           phone: dto.nokPhone,
@@ -436,7 +495,7 @@ export class AuthService {
 
       // Initiate Approval Workflow
       if (savedUser.role === UserRole.MEMBER) {
-        await this.approvalEngine.process('member_registration', savedMember.id, savedUser.id);
+        await this.approvalEngine.process('member_registration', savedMemberId, savedUser.id);
       }
 
       // â”€â”€â”€ Trigger Emails â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
