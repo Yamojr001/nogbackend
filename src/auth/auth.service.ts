@@ -613,11 +613,21 @@ export class AuthService {
 
   async login(user: any, ipAddress?: string, userAgent?: string) {
     try {
+      let isRegistrationFeePaid = true; // Default for non-members
+      if (user.role === UserRole.MEMBER) {
+        const memberProfile = await this.dataSource.getRepository(Member).findOne({ 
+          where: { userId: user.id },
+          select: ['isRegistrationFeePaid']
+        });
+        isRegistrationFeePaid = memberProfile?.isRegistrationFeePaid ?? false;
+      }
+
       const payload = {
         email: user.email,
         sub: user.id,
         role: user.role,
         organisationId: user.organisation?.id ?? user.organisationId ?? null,
+        isRegistrationFeePaid,
       };
 
       // Security: detect new login device/IP
@@ -665,6 +675,7 @@ export class AuthService {
       return {
         access_token: accessToken,
         refresh_token: refreshToken,
+        isRegistrationFeePaid,
       };
     } catch (error) {
       console.error('[Auth] Login failed:', error.message, error);
