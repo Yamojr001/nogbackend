@@ -27,8 +27,22 @@ export class PaystackConfigService {
   ) {}
 
   private async get(key: string, fallback = ''): Promise<string> {
-    const row = await this.configRepo.findOne({ where: { key } });
-    return row?.value ?? fallback;
+    try {
+      const row = await this.configRepo.findOne({ where: { key } });
+      return row?.value ?? fallback;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch system config for key "${key}": ${error.message}. Using fallback.`);
+      // Fallback: Try a raw query to bypass entity schema if columns are missing
+      try {
+        const rows = await this.configRepo.query(
+          'SELECT value FROM system_config WHERE key = $1 LIMIT 1',
+          [key]
+        );
+        return rows[0]?.value ?? fallback;
+      } catch (innerError) {
+        return fallback;
+      }
+    }
   }
 
   async getSecretKey(): Promise<string> {

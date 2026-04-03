@@ -16,7 +16,4 @@ export class SystemConfig {
 
   @Column({ default: 'apex' }) // Who can edit it
   category: string; 
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }
