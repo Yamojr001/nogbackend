@@ -532,17 +532,38 @@ export class AuthService {
       console.error('[Auth] Registration post-processing error:', postErr.message);
     }
 
-    if (savedUser.role === UserRole.MEMBER) {
-      const payRes = await this.paymentService.initializeRegistrationPayment(savedUser.id);
-      return {
-        status: 'success',
-        needsPayment: true,
-        paymentUrl: payRes.data.authorization_url,
-        message: 'Registration successful. Please complete payment to activate your account.',
-      };
+    // 9. Payment Initialization (For Members)
+    if (normalizedRole === UserRole.MEMBER) {
+      try {
+        const payRes = await this.paymentService.initializeRegistrationPayment(savedUser.id);
+        return {
+          status: 'success',
+          needsPayment: true,
+          paymentUrl: payRes.data.authorization_url,
+          message: 'Registration successful. Please complete payment to activate your account.',
+        };
+      } catch (payErr) {
+        console.error('[Auth] Payment initialization failed:', payErr.message);
+        // Fallback: registration succeeded but payment failed to initialize
+        // We still return success but notify that payment needs to be done later
+        return {
+          status: 'success',
+          needsPayment: true,
+          paymentUrl: null,
+          message: 'Registration saved but payment initialization failed. You can pay later from your dashboard.',
+          error: payErr.message,
+        };
+      }
     }
 
-    return this.login(savedUser);
+    // Default: Login and return tokens for non-member roles (Admin, Officer, etc.)
+    const tokens = await this.login(savedUser);
+    return {
+      status: 'success',
+      needsPayment: false,
+      data: tokens,
+      message: 'Registration successful.',
+    };
   }
 
   async validateUser(email: string, password: string): Promise<any> {
