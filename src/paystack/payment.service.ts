@@ -57,7 +57,7 @@ export class PaymentService {
         data: response.data, // includes authorization_url and reference
       };
     } catch (err) {
-      this.logger.error('Paystack initialization failed', err.message);
+      this.logger.error(`Paystack initialization failed for user ${userId} (${user.email}): ${err.message}`, err.stack);
       throw new BadRequestException(`Payment initialization failed: ${err.message}`);
     }
   }

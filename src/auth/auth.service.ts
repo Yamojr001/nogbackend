@@ -49,7 +49,10 @@ export class AuthService {
 
   private async findUserForLogin(email: string): Promise<any | null> {
     try {
-      return await this.userRepository.findOne({ where: { email }, relations: ['organisation'] });
+      return await this.userRepository.findOne({ 
+        where: { email }, 
+        relations: ['organisation', 'memberProfile'] 
+      });
     } catch (error) {
       // Fallback for environments with older DB schema missing optional auth columns.
       if (!this.isMissingColumnError(error)) {
@@ -89,6 +92,7 @@ export class AuthService {
         role: row.role,
         organisationId: null,
         organisation: undefined,
+        memberProfile: undefined,
         failedLoginAttempts: 0,
         needsCaptcha: false,
         lockUntil: null,
@@ -256,7 +260,7 @@ export class AuthService {
 
       let user = await this.userRepository.findOne({ 
         where: [{ email }, { googleId }],
-        relations: ['organisation'] 
+        relations: ['organisation', 'memberProfile'] 
       });
 
       if (!user) {
@@ -615,11 +619,16 @@ export class AuthService {
     try {
       let isRegistrationFeePaid = true; // Default for non-members
       if (user.role === UserRole.MEMBER) {
-        const memberProfile = await this.dataSource.getRepository(Member).findOne({ 
-          where: { userId: user.id },
-          select: ['isRegistrationFeePaid']
-        });
+        // Use pre-fetched memberProfile if available, otherwise fetch it.
+        let memberProfile = user.memberProfile;
+        if (!memberProfile) {
+          memberProfile = await this.dataSource.getRepository(Member).findOne({ 
+            where: { userId: user.id },
+            select: ['isRegistrationFeePaid']
+          });
+        }
         isRegistrationFeePaid = memberProfile?.isRegistrationFeePaid ?? false;
+        console.log(`[Auth] Member login for ID ${user.id}: profile found=${!!memberProfile}, paid=${isRegistrationFeePaid}`);
       }
 
       const payload = {
