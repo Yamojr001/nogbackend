@@ -16,11 +16,11 @@ async function checkSeed() {
     await client.connect();
     
     console.log('--- USERS ---');
-    const resUsers = await client.query('SELECT name, email, role FROM "user"'); // Postgres needs quotes for some reserved words or custom types
+    const resUsers = await client.query('SELECT name, email, role FROM users LIMIT 5'); 
     resUsers.rows.forEach(u => console.log(`- ${u.name} (${u.role})`));
 
     console.log('--- CONFIGS ---');
-    const resConfigs = await client.query('SELECT key, value FROM system_config');
+    const resConfigs = await client.query("SELECT key, value FROM system_config WHERE key LIKE 'paystack.%'");
     resConfigs.rows.forEach(c => console.log(`- ${c.key}: ${c.value}`));
     
     await client.end();

@@ -29,7 +29,7 @@ export class PaystackConfigService {
   private async get(key: string, fallback = ''): Promise<string> {
     try {
       const row = await this.configRepo.findOne({ where: { key } });
-      return row?.value ?? fallback;
+      return (row?.value ?? fallback).trim();
     } catch (error) {
       this.logger.warn(`Failed to fetch system config for key "${key}": ${error.message}. Using fallback.`);
       // Fallback: Try a raw query to bypass entity schema if columns are missing
@@ -38,9 +38,9 @@ export class PaystackConfigService {
           'SELECT value FROM system_config WHERE key = $1 LIMIT 1',
           [key]
         );
-        return rows[0]?.value ?? fallback;
+        return (rows[0]?.value ?? fallback).trim();
       } catch (innerError) {
-        return fallback;
+        return fallback.trim();
       }
     }
   }
@@ -86,6 +86,8 @@ export class PaystackConfigService {
     if (!secretKey) {
       throw new Error('Paystack secret key not configured. Go to Admin → Payment Settings to add it.');
     }
+
+    this.logger.debug(`Making Paystack request to ${path} using key ending in ...${secretKey.slice(-4)}`);
 
     return new Promise((resolve, reject) => {
       const url     = new URL(path, baseUrl);
