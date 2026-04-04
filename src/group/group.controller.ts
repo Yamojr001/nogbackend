@@ -2,13 +2,14 @@ import { Controller, Get, Param, UseGuards, Patch, Body, Post } from '@nestjs/co
 import { GroupService } from './group.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { ResourceOwnershipGuard } from '../auth/resource-ownership.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../entities/user.entity';
 import { GroupSyncDto, MarkAttendanceDto } from './dto/group.dto';
 
 @Controller('group')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.GROUP_ADMIN, UserRole.GROUP_TREASURER, UserRole.GROUP_SECRETARY, UserRole.SUB_ORG_ADMIN, UserRole.SUPER_ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, ResourceOwnershipGuard)
+@Roles(UserRole.GROUP_ADMIN, UserRole.GROUP_TREASURER, UserRole.GROUP_SECRETARY, UserRole.SUB_ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN, UserRole.AUDITOR)
 export class GroupController {
   constructor(private readonly groupService: GroupService) {}
 

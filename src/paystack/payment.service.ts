@@ -10,7 +10,7 @@ import { PaystackConfigService } from './paystack-config.service';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
-  private readonly REGISTRATION_FEE = 5250; // NGN
+  private readonly REGISTRATION_FEE = 5500; // NGN
 
   constructor(
     @InjectRepository(Member)

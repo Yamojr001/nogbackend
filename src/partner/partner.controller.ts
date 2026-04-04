@@ -1,13 +1,14 @@
 import { Controller, Get, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { ResourceOwnershipGuard } from '../auth/resource-ownership.guard';
 import { Roles } from '../auth/roles.decorator';
 import { PartnerService } from './partner.service';
 import { UserRole } from '../entities/user.entity';
 
 @Controller('partner')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPER_ADMIN, UserRole.PARTNER_ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, ResourceOwnershipGuard)
+@Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN, UserRole.AUDITOR, UserRole.PARTNER_ADMIN)
 export class PartnerController {
   constructor(private readonly partnerService: PartnerService) {}
 

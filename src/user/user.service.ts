@@ -32,8 +32,12 @@ export class UserService {
     const user = await this.findOne(id);
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
     
-    Object.assign(user, userData);
-    return this.userRepository.save(user);
+    try {
+      Object.assign(user, userData);
+      return await this.userRepository.save(user);
+    } catch (saveError) {
+      throw saveError;
+    }
   }
 
   async remove(id: number): Promise<void> {

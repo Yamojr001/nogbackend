@@ -11,6 +11,7 @@ import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 
 @Controller('organisations')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN)
 export class OrganisationController {
   constructor(private readonly organisationService: OrganisationService) {}
 

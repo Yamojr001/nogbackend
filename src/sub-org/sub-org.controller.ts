@@ -2,11 +2,12 @@ import { Controller, Get, Param, ParseIntPipe, UseGuards } from '@nestjs/common'
 import { SubOrgService } from './sub-org.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { ResourceOwnershipGuard } from '../auth/resource-ownership.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../entities/user.entity';
 
 @Controller('sub-org')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ResourceOwnershipGuard)
 @Roles(UserRole.SUB_ORG_ADMIN, UserRole.SUB_ORG_OFFICER, UserRole.PARTNER_ADMIN, UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN, UserRole.AUDITOR)
 export class SubOrgController {
   constructor(private subOrgService: SubOrgService) {}

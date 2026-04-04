@@ -617,25 +617,27 @@ export class AuthService {
 
   async login(user: any, ipAddress?: string, userAgent?: string) {
     try {
-      let isRegistrationFeePaid = true; // Default for non-members
-      if (user.role === UserRole.MEMBER) {
-        // Use pre-fetched memberProfile if available, otherwise fetch it.
-        let memberProfile = user.memberProfile;
-        if (!memberProfile) {
-          memberProfile = await this.dataSource.getRepository(Member).findOne({ 
-            where: { userId: user.id },
-            select: ['isRegistrationFeePaid']
-          });
-        }
-        isRegistrationFeePaid = memberProfile?.isRegistrationFeePaid ?? false;
-        console.log(`[Auth] Member login for ID ${user.id}: profile found=${!!memberProfile}, paid=${isRegistrationFeePaid}`);
+      let memberProfile = user.memberProfile;
+      if (!memberProfile && [UserRole.MEMBER, UserRole.GROUP_ADMIN, UserRole.GROUP_TREASURER, UserRole.GROUP_SECRETARY, UserRole.SUB_ORG_ADMIN].includes(user.role)) {
+        memberProfile = await this.dataSource.getRepository(Member).findOne({ 
+          where: { userId: user.id },
+          select: ['id', 'isRegistrationFeePaid', 'branchId', 'groupId', 'organisationId']
+        });
       }
+      
+      const isRegistrationFeePaid = user.role === UserRole.MEMBER ? (memberProfile?.isRegistrationFeePaid ?? false) : true;
+      const branchId = user.branchId ?? memberProfile?.branchId ?? null;
+      const groupId = memberProfile?.groupId ?? null;
+
+      console.log(`[Auth] User ${user.id} (${user.role}) Login - Branch: ${branchId}, Group: ${groupId}`);
 
       const payload = {
         email: user.email,
         sub: user.id,
         role: user.role,
-        organisationId: user.organisation?.id ?? user.organisationId ?? null,
+        organisationId: user.organisation?.id ?? user.organisationId ?? memberProfile?.organisationId ?? null,
+        branchId,
+        groupId,
         isRegistrationFeePaid,
       };
 

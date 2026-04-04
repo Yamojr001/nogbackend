@@ -18,7 +18,7 @@ export class GroupService {
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Loan) private loanRepo: Repository<Loan>,
     private dataSource: DataSource,
-  ) {}
+  ) { }
 
   async findAll(): Promise<Group[]> {
     return this.groupRepo.find({ relations: ['subOrg'] });
@@ -30,12 +30,12 @@ export class GroupService {
       if (!group) throw new NotFoundException('Group not found');
 
       const totalMembers = await this.memberRepo.count({ where: { groupId } });
-      
+
       const groupMembers = await this.memberRepo.find({ where: { groupId } });
       const totalSavings = groupMembers.reduce((sum, m) => sum + Number(m.contributionBalance || 0), 0);
 
-      const activeLoansCount = await this.memberRepo.count({ 
-        where: { groupId, loanStatus: 'active' } 
+      const activeLoansCount = await this.memberRepo.count({
+        where: { groupId, loanStatus: 'active' }
       });
 
       const pendingRequests = await this.txnRepo.count({
@@ -50,6 +50,9 @@ export class GroupService {
         pendingRequests,
       };
     } catch (error) {
+      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
       throw new InternalServerErrorException(error.message);
     }
   }
@@ -64,7 +67,7 @@ export class GroupService {
   async updateMemberRole(userId: number, role: UserRole) {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
-    
+
     user.role = role;
     return this.userRepo.save(user);
   }
@@ -81,7 +84,7 @@ export class GroupService {
   async markAttendance(memberId: number, date: Date, status: string) {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) throw new NotFoundException('Member not found');
-    
+
     // In a real app, we'd have an Attendance entity. For now, we simulate by logging/updating
     console.log(`Marking attendance for member ${memberId} on ${date}: ${status}`);
     return { success: true, memberId, date, status };
@@ -89,7 +92,7 @@ export class GroupService {
 
   async syncData(groupId: number, payload: GroupSyncDto) {
     const { contributions, memberUpdates } = payload;
-    
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -102,7 +105,7 @@ export class GroupService {
           if (member) {
             member.contributionBalance = Number(member.contributionBalance) + Number(c.amount);
             await queryRunner.manager.save(member);
-            
+
             const txn = queryRunner.manager.create(Transaction, {
               reference: `SYNC-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
               amount: c.amount,
@@ -120,15 +123,15 @@ export class GroupService {
 
       // Process member updates (optional, if needed)
       if (memberUpdates && Array.isArray(memberUpdates)) {
-         for (const update of memberUpdates) {
-           const member = await queryRunner.manager.findOne(Member, { where: { id: update.memberId }, relations: ['user'] });
-           if (member?.user && update.phone) {
-             member.user.phone = update.phone;
-             await queryRunner.manager.save(member.user);
-           }
-         }
+        for (const update of memberUpdates) {
+          const member = await queryRunner.manager.findOne(Member, { where: { id: update.memberId }, relations: ['user'] });
+          if (member?.user && update.phone) {
+            member.user.phone = update.phone;
+            await queryRunner.manager.save(member.user);
+          }
+        }
       }
-      
+
       await queryRunner.commitTransaction();
       return { syncedAt: new Date(), status: 'success' };
     } catch (err) {
@@ -140,7 +143,6 @@ export class GroupService {
   }
 
   async getGroupLoans(groupId: number) {
-    // This is a bit complex due to relations, but we target loans where member belongs to the group
     return this.loanRepo.find({
       where: { member: { memberProfile: { groupId } } as any },
       relations: ['member', 'member.memberProfile'],
