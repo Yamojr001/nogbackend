@@ -102,11 +102,15 @@ export class VirtualAccountService {
   async handleWebhookEvent(event: string, data: any): Promise<void> {
     this.logger.log(`Processing Paystack webhook: ${event}`);
 
-    if (
-      event !== 'dedicated_account.transaction.success' &&
-      event !== 'charge.success'
-    ) {
-      this.logger.debug(`Ignoring unsupported event: ${event}`);
+    const amountKobo: number = data?.amount ?? 0;
+    const amountNGN   = amountKobo / 100;
+    const reference: string = data?.reference ?? '';
+    const paystackTxRef: string = data?.id?.toString() ?? reference;
+
+    const metadata = data?.metadata;
+    if (metadata?.type === 'registration_fee' && metadata?.memberId) {
+      this.logger.log(`Detected registration fee payment for memberId: ${metadata.memberId}`);
+      await this.paymentService.handleRegistrationSuccess(Number(metadata.memberId), paystackTxRef);
       return;
     }
 
@@ -115,31 +119,8 @@ export class VirtualAccountService {
       data?.receiver_bank_account_number ??
       null;
 
-    const amountKobo: number = data?.amount ?? 0;
-    const amountNGN   = amountKobo / 100;
-    const reference: string = data?.reference ?? '';
-    const paystackTxRef: string = data?.id?.toString() ?? reference;
-
     if (!accountNumber || amountNGN <= 0) {
       this.logger.warn('Webhook missing account_number or amount — skipped');
-      return;
-    }
-
-    // --- Idempotency: skip if reference already processed ---
-    const alreadyProcessed = await this.dataSource
-      .getRepository(Transaction)
-      .findOne({ where: { externalReference: paystackTxRef } });
-
-    if (alreadyProcessed) {
-      this.logger.warn(`Duplicate webhook reference: ${paystackTxRef}`);
-      return;
-    }
-
-    // --- Check if this is a Registration Fee (metadata-based) ---
-    const metadata = data?.metadata;
-    if (metadata?.type === 'registration_fee' && metadata?.memberId) {
-      this.logger.log(`Detected registration fee payment for memberId: ${metadata.memberId}`);
-      await this.paymentService.handleRegistrationSuccess(Number(metadata.memberId), paystackTxRef);
       return;
     }
 

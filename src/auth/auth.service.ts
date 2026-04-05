@@ -728,6 +728,19 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
+  async getProfile(userId: number) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['organisation', 'memberProfile']
+    });
+
+    if (!user) throw new UnauthorizedException('User not found');
+
+    // Return sanitized profile
+    const { password, refreshTokenHash, resetToken, resetTokenExpires, ...profile } = user;
+    return profile;
+  }
+
   async getPublicOrganisations() {
     return this.dataSource.getRepository(Organisation).find({
       select: ['id', 'name', 'code', 'type'],

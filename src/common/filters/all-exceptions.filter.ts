@@ -28,12 +28,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const message = isHttpException
       ? (exception as HttpException).getResponse()
-      : 'An internal error occurred. Please contact support.';
+      : (exception as any).message || 'An internal error occurred. Please contact support.';
+
+    let path = 'unknown';
+    try {
+      path = httpAdapter.getRequestUrl(ctx.getRequest());
+    } catch {
+      const req = ctx.getRequest();
+      path = req.url || req.originalUrl || 'unknown';
+    }
 
     const responseBody = {
       statusCode: httpStatus,
       timestamp: new Date().toISOString(),
-      path: httpAdapter.getRequestUrl(ctx.getRequest()),
+      path,
       message: typeof message === 'object' ? (message as any).message || message : message,
     };
 
@@ -42,6 +50,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       (exception as any).stack,
     );
 
-    httpAdapter.reply(ctx.getResponse(), responseBody, httpStatus);
+    try {
+      httpAdapter.reply(ctx.getResponse(), responseBody, httpStatus);
+    } catch (replyError) {
+      this.logger.error('Failed to send error response via httpAdapter', replyError.stack);
+      // Fallback for extreme cases
+      const res = ctx.getResponse();
+      if (typeof res.status === 'function') {
+        res.status(httpStatus).json(responseBody);
+      }
+    }
   }
 }

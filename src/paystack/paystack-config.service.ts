@@ -121,6 +121,11 @@ export class PaystackConfigService {
         });
       });
 
+      req.setTimeout(30000, () => {
+        req.destroy();
+        reject(new Error('Paystack request timed out (30s)'));
+      });
+
       req.on('error', reject);
       if (payload) req.write(payload);
       req.end();

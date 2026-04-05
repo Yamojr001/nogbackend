@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Member } from '../entities/member.entity';
@@ -10,7 +10,7 @@ import { PaystackConfigService } from './paystack-config.service';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
-  private readonly REGISTRATION_FEE = 5500; // NGN
+  private readonly REGISTRATION_FEE = 550; // NGN
 
   constructor(
     @InjectRepository(Member)
@@ -32,7 +32,15 @@ export class PaymentService {
     }
 
     if (user.memberProfile.isRegistrationFeePaid) {
-      throw new BadRequestException('Registration fee already paid');
+      return {
+        status: 'success',
+        alreadyPaid: true,
+        message: 'Registration fee already paid',
+      };
+    }
+
+    if (!(await this.paystackConfig.isEnabled())) {
+      throw new BadRequestException('Payment gateway is currently disabled. Please contact support.');
     }
 
     try {
@@ -62,6 +70,71 @@ export class PaymentService {
     }
   }
 
+  async verifyRegistrationPayment(userId: number, reference: string) {
+    if (!reference?.trim()) {
+      throw new BadRequestException('Payment reference is required');
+    }
+
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['memberProfile'],
+    });
+
+    if (!user || !user.memberProfile) {
+      throw new NotFoundException('Member profile not found');
+    }
+
+    if (user.memberProfile.isRegistrationFeePaid) {
+      return {
+        status: 'success',
+        isRegistrationFeePaid: true,
+        message: 'Registration fee already marked as paid.',
+      };
+    }
+
+    if (!(await this.paystackConfig.isEnabled())) {
+      throw new BadRequestException('Payment gateway is currently disabled. Please contact support.');
+    }
+
+    try {
+      const response = await this.paystackConfig.request<any>('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+      const tx = response?.data;
+
+      if (tx?.status !== 'success') {
+        throw new BadRequestException('Payment not successful yet.');
+      }
+
+      const amountPaid = Number(tx?.amount ?? 0) / 100;
+      if (amountPaid < this.REGISTRATION_FEE) {
+        throw new BadRequestException(
+          `Insufficient payment amount. Expected at least NGN ${this.REGISTRATION_FEE}, got NGN ${amountPaid}.`,
+        );
+      }
+
+      const metadataMemberId = Number(tx?.metadata?.memberId);
+      if (metadataMemberId && metadataMemberId !== user.memberProfile.id) {
+        throw new ForbiddenException('Payment reference does not belong to this user.');
+      }
+
+      await this.handleRegistrationSuccess(
+        user.memberProfile.id,
+        tx?.id?.toString() ?? tx?.reference ?? reference,
+      );
+
+      return {
+        status: 'success',
+        isRegistrationFeePaid: true,
+        message: 'Payment verified. Registration status updated to paid.',
+      };
+    } catch (err) {
+      if (err instanceof BadRequestException || err instanceof NotFoundException || err instanceof ForbiddenException) {
+        throw err;
+      }
+      this.logger.error(`Payment verification failed for user ${userId}: ${err.message}`, err.stack);
+      throw new BadRequestException(`Payment verification failed: ${err.message}`);
+    }
+  }
+
   async handleRegistrationSuccess(memberId: number, reference: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -88,7 +161,13 @@ export class PaymentService {
         isRegistrationFeePaid: true,
         paymentReference: reference,
         status: 'active',
+        kycStatus: 'verified' // Auto-verify registration after payment
       });
+
+      // 1.1 Also update user status if needed
+      if (member.user && member.user.status !== 'active') {
+        await queryRunner.manager.update(User, member.user.id, { status: 'active', isVerified: true });
+      }
 
       // 2. Create Transaction
       const txn = queryRunner.manager.create(Transaction, {

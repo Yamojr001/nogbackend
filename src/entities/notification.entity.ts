@@ -14,7 +14,7 @@ export enum NotificationStatus {
   FAILED = 'failed',
 }
 
-@Entity()
+@Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn()
   id: number;

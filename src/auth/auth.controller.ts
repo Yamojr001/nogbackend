@@ -11,6 +11,11 @@ export class AuthController {
     private paymentService: PaymentService,
   ) { }
 
+  @Get('health')
+  async health() {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Request() req) {
@@ -50,6 +55,12 @@ export class AuthController {
     return this.paymentService.initializeRegistrationPayment(req.user.userId);
   }
 
+  @Post('register/verify-payment')
+  @UseGuards(JwtAuthGuard)
+  async verifyPayment(@Request() req: any, @Body('reference') reference: string) {
+    return this.paymentService.verifyRegistrationPayment(req.user.userId, reference);
+  }
+
   @Post('refresh')
   async refresh(@Body('refreshToken') refreshToken: string) {
     return this.authService.refreshToken(refreshToken);
@@ -59,6 +70,12 @@ export class AuthController {
   @Post('logout')
   async logout(@Request() req) {
     return this.authService.logout(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile(@Request() req) {
+    return this.authService.getProfile(req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)

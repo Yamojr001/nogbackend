@@ -11,7 +11,6 @@ import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 
 @Controller('organisations')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN)
 export class OrganisationController {
   constructor(private readonly organisationService: OrganisationService) {}
 
@@ -32,11 +31,13 @@ export class OrganisationController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN)
   update(@Param('id') id: string, @Body() data: UpdateOrganisationDto) {
     return this.organisationService.update(+id, data);
   }
 
   @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN)
   remove(@Param('id') id: string) {
     return this.organisationService.remove(+id);
   }

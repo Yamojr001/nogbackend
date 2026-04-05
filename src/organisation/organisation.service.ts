@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { TreeRepository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TreeRepository, Repository } from 'typeorm';
 import { Organisation } from '../entities/organisation.entity';
 import { CreateOrganisationDto } from './dto/create-organisation.dto';
 import { UpdateOrganisationDto } from './dto/update-organisation.dto';
@@ -9,7 +10,9 @@ import { NotFoundException } from '@nestjs/common';
 export class OrganisationService {
   constructor(
     @Inject('ORGANISATION_TREE_REPO')
-    private organisationRepository: TreeRepository<Organisation>,
+    private organisationTreeRepository: TreeRepository<Organisation>,
+    @InjectRepository(Organisation)
+    private organisationRepository: Repository<Organisation>,
   ) {}
 
   async create(data: CreateOrganisationDto): Promise<Organisation> {
@@ -33,16 +36,18 @@ export class OrganisationService {
     // Generate unique code
     (data as any).code = await this.generateCode(data.type);
 
-    const org = this.organisationRepository.create(data as any);
-    return this.organisationRepository.save(org) as any;
+    const org = this.organisationRepository.create(data as any) as any;
+    return this.organisationRepository.save(org as any);
   }
 
   private async generateCode(type: string): Promise<string> {
     const prefix = type === 'partner' ? 'ORG' : type === 'sub_org' ? 'SUB' : 'GRP';
-    const lastOrg = await this.organisationRepository.findOne({
+    const orgs = await this.organisationRepository.find({
       where: { type: type as any },
-      order: { id: 'DESC' }
+      order: { id: 'DESC' },
+      take: 1
     });
+    const lastOrg = orgs[0];
     
     const lastId = lastOrg ? lastOrg.id : 0;
     const nextId = (lastId + 1).toString().padStart(4, '0');
@@ -50,7 +55,16 @@ export class OrganisationService {
   }
 
   async findAll(): Promise<Organisation[]> {
-    return this.organisationRepository.find({ relations: ['parent'] });
+    try {
+      // Use standard repository for faster listing, bypassing tree repo overhead
+      return await this.organisationRepository.find({ 
+        relations: ['parent'],
+        order: { id: 'DESC' }
+      });
+    } catch (error) {
+      console.error('[OrganisationService] findAll failed:', error.message);
+      throw error;
+    }
   }
 
   async findOne(id: number): Promise<Organisation> {
