@@ -178,7 +178,6 @@ async function run() {
 
       // Create Member Wallet
       const memberWallet = walletRepo.create({
-        type: WalletType.MEMBER,
         balance: 50000,
         currency: 'NGN',
         ownerId: memberUser.id,
@@ -370,7 +369,7 @@ async function run() {
       console.log('KYC documents seeded.');
 
       // Sample Transactions
-      const partnerWallet = await walletRepo.findOne({ where: { ownerId: partner.id, type: WalletType.PARTNER } });
+      const partnerWallet = await walletRepo.findOne({ where: { ownerId: partner.id, ownerType: WalletType.PARTNER } });
       const memberWallet = await walletRepo.findOne({ where: { id: memberRecord.walletId } });
       if (partnerWallet && memberWallet) {
         const txns = [

@@ -8,6 +8,7 @@ import { Loan } from '../entities/loan.entity';
 import { SupportTicket } from '../entities/support-ticket.entity';
 import { Beneficiary } from '../entities/beneficiary.entity';
 import { User } from '../entities/user.entity';
+import { RegistrationFeeGuard } from '../auth/registration-fee.guard';
 
 import { RepaymentSchedule } from '../entities/repayment-schedule.entity';
 import { ProgramApplication } from '../entities/program-application.entity';
@@ -16,7 +17,7 @@ import { ProgramApplication } from '../entities/program-application.entity';
   imports: [
     TypeOrmModule.forFeature([Member, Transaction, Loan, SupportTicket, Beneficiary, User, RepaymentSchedule, ProgramApplication]),
   ],
-  providers: [MemberService],
+  providers: [MemberService, RegistrationFeeGuard],
   controllers: [MemberController],
   exports: [MemberService],
 })

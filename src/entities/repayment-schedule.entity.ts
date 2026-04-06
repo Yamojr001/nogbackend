@@ -22,35 +22,35 @@ export class RepaymentSchedule {
   id: number;
 
   @ManyToOne(() => Loan)
-  @JoinColumn()
+  @JoinColumn({ name: 'loan_id' })
   loan: Loan;
 
-  @Column()
+  @Column({ name: 'loan_id' })
   loanId: number;
 
   @ManyToOne(() => Member)
-  @JoinColumn()
+  @JoinColumn({ name: 'member_id' })
   member: Member;
 
-  @Column()
+  @Column({ name: 'member_id' })
   memberId: number;
 
-  @Column()
+  @Column({ name: 'installment_number' })
   installmentNumber: number; // 1, 2, 3... (month of repayment)
 
-  @Column({ type: 'date' })
+  @Column({ name: 'due_date', type: 'date' })
   dueDate: Date;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ name: 'principal_due', type: 'decimal', precision: 12, scale: 2 })
   principalDue: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ name: 'interest_due', type: 'decimal', precision: 12, scale: 2 })
   interestDue: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ name: 'total_due', type: 'decimal', precision: 12, scale: 2 })
   totalDue: number; // principal + interest
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'amount_paid', type: 'decimal', precision: 12, scale: 2, default: 0 })
   amountPaid: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
@@ -62,18 +62,18 @@ export class RepaymentSchedule {
   @Column({ type: 'enum', enum: RepaymentStatus, default: RepaymentStatus.SCHEDULED })
   status: RepaymentStatus;
 
-  @Column({ nullable: true, type: 'timestamp' })
+  @Column({ name: 'paid_at', nullable: true, type: 'timestamp' })
   paidAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'paid_by', nullable: true })
   paidBy: number; // FK to User (officer who recorded payment)
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

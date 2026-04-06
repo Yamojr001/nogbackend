@@ -54,32 +54,43 @@ export class AuthService {
         relations: ['organisation', 'memberProfile'] 
       });
     } catch (error) {
-      // Fallback for environments with older DB schema missing optional auth columns.
       if (!this.isMissingColumnError(error)) {
         throw error;
       }
 
+      // Dynamic fallback for environments with older/inconsistent DB schemas.
+      // We check what columns actually exist to avoid 500 errors.
+      const tablesToTry = ['users', '"user"']; 
       let rows: any[] = [];
-      try {
-        rows = await this.dataSource.query(
-          `SELECT id, email, password, role
-           FROM "user"
-           WHERE email = $1
-           LIMIT 1`,
-          [email],
-        );
-      } catch (innerError) {
-        if (!this.isMissingColumnError(innerError)) {
-          throw innerError;
-        }
 
-        rows = await this.dataSource.query(
-          `SELECT id, email, password, role
-           FROM users
-           WHERE email = $1
-           LIMIT 1`,
-          [email],
-        );
+      for (const table of tablesToTry) {
+        try {
+          const tableNameForQuery = table.replace(/"/g, '');
+          const columnRows = await this.dataSource.query(
+            `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+            [tableNameForQuery]
+          );
+          const availableCols = new Set(columnRows.map((c: any) => c.column_name));
+
+          const selectFields = ['id', 'email', 'password', 'role'];
+          if (availableCols.has('first_name')) selectFields.push('first_name');
+          if (availableCols.has('last_name')) selectFields.push('last_name');
+          if (availableCols.has('name')) selectFields.push('name');
+          if (availableCols.has('phone')) selectFields.push('phone');
+          if (availableCols.has('status')) selectFields.push('status');
+          if (availableCols.has('is_verified')) selectFields.push('is_verified');
+          if (availableCols.has('has_paid_registration_fee')) selectFields.push('has_paid_registration_fee');
+          if (availableCols.has('organization_id')) selectFields.push('organization_id');
+          if (availableCols.has('branch_id')) selectFields.push('branch_id');
+
+          rows = await this.dataSource.query(
+            `SELECT ${selectFields.join(', ')} FROM ${table} WHERE email = $1 LIMIT 1`,
+            [email]
+          );
+          if (rows.length > 0) break;
+        } catch (e) {
+          continue; 
+        }
       }
 
       if (!rows.length) return null;
@@ -90,7 +101,15 @@ export class AuthService {
         email: row.email,
         password: row.password,
         role: row.role,
-        organisationId: null,
+        firstName: row.first_name || '',
+        lastName: row.last_name || '',
+        name: row.name || `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+        phone: row.phone,
+        status: row.status || 'active',
+        isVerified: row.is_verified ?? true,
+        hasPaidRegistrationFee: Boolean(row.has_paid_registration_fee ?? false),
+        organisationId: row.organization_id || null,
+        branchId: row.branch_id || null,
         organisation: undefined,
         memberProfile: undefined,
         failedLoginAttempts: 0,
@@ -115,7 +134,6 @@ export class AuthService {
   private async insertWalletCompat(
     queryRunner: any,
     walletData: {
-      type: WalletType;
       balance: number;
       currency: string;
       status: string;
@@ -134,7 +152,6 @@ export class AuthService {
     const insertValues: any[] = [];
 
     const candidates: Array<[string, any]> = [
-      ['type', walletData.type],
       ['balance', walletData.balance],
       ['currency', walletData.currency],
       ['status', walletData.status],
@@ -421,24 +438,27 @@ export class AuthService {
 
     try {
       // 4. Create User
+      const fullName = dto.name || `${firstName} ${lastName}`.trim();
+      const fName = firstName || fullName.split(' ')[0] || '';
+      const lName = lastName || fullName.split(' ').slice(1).join(' ') || '';
+
       const user = queryRunner.manager.create(User, {
         email,
         password: hashedPassword,
-        firstName,
-        lastName,
-        name: `${firstName} ${lastName}`,
-        phone,
+        firstName: fName,
+        lastName: lName,
+        name: fullName,
+        phone: phone || null,
         role: normalizedRole,
         organisation: { id: organisationId } as Organisation,
         status: 'pending',
-        nin: dto.nin,
-        bvn: dto.bvn,
+        nin: dto.nin || null,
+        bvn: dto.bvn || null,
       });
       savedUser = await queryRunner.manager.save(user);
 
       // 5. Create Wallet
       const savedWalletId = await this.insertWalletCompat(queryRunner, {
-        type: WalletType.MEMBER,
         balance: 0,
         currency: 'NGN',
         status: 'active',
@@ -621,11 +641,11 @@ export class AuthService {
       if (!memberProfile && [UserRole.MEMBER, UserRole.GROUP_ADMIN, UserRole.GROUP_TREASURER, UserRole.GROUP_SECRETARY, UserRole.SUB_ORG_ADMIN].includes(user.role)) {
         memberProfile = await this.dataSource.getRepository(Member).findOne({ 
           where: { userId: user.id },
-          select: ['id', 'isRegistrationFeePaid', 'branchId', 'groupId', 'organisationId']
         });
       }
       
-      const isRegistrationFeePaid = user.role === UserRole.MEMBER ? (memberProfile?.isRegistrationFeePaid ?? false) : true;
+      const hasPaidRegistrationFee = user.role === UserRole.MEMBER ? (user.hasPaidRegistrationFee || (memberProfile?.hasPaidRegistrationFee ?? false)) : true;
+      const isProfileComplete = user.role === UserRole.MEMBER ? !!(user.firstName && user.lastName && user.phone) : true;
       const branchId = user.branchId ?? memberProfile?.branchId ?? null;
       const groupId = memberProfile?.groupId ?? null;
 
@@ -638,7 +658,8 @@ export class AuthService {
         organisationId: user.organisation?.id ?? user.organisationId ?? memberProfile?.organisationId ?? null,
         branchId,
         groupId,
-        isRegistrationFeePaid,
+        hasPaidRegistrationFee,
+        isProfileComplete,
       };
 
       // Security: detect new login device/IP
@@ -686,7 +707,12 @@ export class AuthService {
       return {
         access_token: accessToken,
         refresh_token: refreshToken,
-        isRegistrationFeePaid,
+        role: user.role,
+        user_name: user.name ?? `${user.firstName} ${user.lastName}`,
+        hasPaidRegistrationFee,
+        isProfileComplete,
+        message: hasPaidRegistrationFee ? 'SUCCESS' : 'PAYMENT_REQUIRED',
+        organisationId: payload.organisationId,
       };
     } catch (error) {
       console.error('[Auth] Login failed:', error.message, error);
@@ -729,16 +755,150 @@ export class AuthService {
   }
 
   async getProfile(userId: number) {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['organisation', 'memberProfile']
-    });
+    let user;
+    try {
+      user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['organisation', 'memberProfile']
+      });
+    } catch (error) {
+      if (!this.isMissingColumnError(error)) {
+        throw error;
+      }
+
+      // Fallback for profile retrieval in restricted schemas
+      const tablesToTry = ['users', '"user"'];
+      for (const table of tablesToTry) {
+        try {
+          const tableNameForQuery = table.replace(/"/g, '');
+          const columnRows = await this.dataSource.query(
+            `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+            [tableNameForQuery]
+          );
+          const availableCols = new Set(columnRows.map((c: any) => c.column_name));
+
+          const selectFields = ['id', 'email', 'role', 'name', 'first_name', 'last_name', 'phone', 'status', 'is_verified', 'has_paid_registration_fee', 'organization_id', 'branch_id'];
+          const activeFields = selectFields.filter(f => {
+            const dbName = f.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            return availableCols.has(dbName) || availableCols.has(f);
+          });
+
+          const rows = await this.dataSource.query(
+            `SELECT ${activeFields.join(', ')} FROM ${table} WHERE id = $1 LIMIT 1`,
+            [userId]
+          );
+          if (rows.length > 0) {
+            const row = rows[0];
+            user = {
+              id: row.id,
+              email: row.email,
+              role: row.role,
+              name: row.name,
+              firstName: row.first_name,
+              lastName: row.last_name,
+              phone: row.phone,
+              status: row.status,
+              isVerified: row.is_verified,
+              hasPaidRegistrationFee: Boolean(row.has_paid_registration_fee ?? false),
+              organisationId: row.organization_id,
+              branchId: row.branch_id,
+            };
+            break;
+          }
+        } catch (e) { continue; }
+      }
+    }
 
     if (!user) throw new UnauthorizedException('User not found');
 
     // Return sanitized profile
     const { password, refreshTokenHash, resetToken, resetTokenExpires, ...profile } = user;
+    
+    // Ensure memberProfile is also checked if it was missing from relations
+    if (!profile.memberProfile && [UserRole.MEMBER].includes(profile.role)) {
+       try {
+         profile.memberProfile = await this.dataSource.getRepository(Member).findOne({ 
+           where: { userId: profile.id } 
+         });
+         if (profile.memberProfile) {
+           profile.hasPaidRegistrationFee = profile.hasPaidRegistrationFee || profile.memberProfile.hasPaidRegistrationFee;
+         }
+       } catch (e) { /* ignore member fetch error in fallback */ }
+    }
+
     return profile;
+  }
+
+  async updateProfile(userId: number, dto: any) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['memberProfile', 'memberProfile.nextOfKin']
+    });
+
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const { 
+      name, firstName, lastName, phone, address, phoneNumber,
+      gender, dateOfBirth, maritalStatus, stateOfOrigin, nationality,
+      occupation, educationalQualification,
+      extOrgName, extPosition, extStateChapter,
+      savingsFrequency, proposedSavingsAmount, empowermentInterest,
+      nokName, nokRelationship, nokPhone, nokAddress, nokEmail
+    } = dto;
+
+    // Update User entity
+    const userUpdate: Partial<User> = {};
+    if (name) userUpdate.name = name;
+    if (firstName) userUpdate.firstName = firstName;
+    if (lastName) userUpdate.lastName = lastName;
+    if (phone || phoneNumber) userUpdate.phone = phone || phoneNumber;
+
+    if (Object.keys(userUpdate).length > 0) {
+      await this.userRepository.update(userId, userUpdate);
+    }
+
+    // Update Member entity
+    if (user.memberProfile) {
+      const memberUpdate: any = {};
+      if (address) memberUpdate.address = address;
+      if (gender) memberUpdate.gender = gender;
+      if (dateOfBirth) memberUpdate.dateOfBirth = dateOfBirth;
+      if (maritalStatus) memberUpdate.maritalStatus = maritalStatus;
+      if (stateOfOrigin) memberUpdate.stateOfOrigin = stateOfOrigin;
+      if (nationality) memberUpdate.nationality = nationality;
+      if (occupation) memberUpdate.occupation = occupation;
+      if (educationalQualification) memberUpdate.educationalQualification = educationalQualification;
+      if (extOrgName) memberUpdate.extOrgName = extOrgName;
+      if (extPosition) memberUpdate.extPosition = extPosition;
+      if (extStateChapter) memberUpdate.extStateChapter = extStateChapter;
+      if (savingsFrequency) memberUpdate.savingsFrequency = savingsFrequency;
+      if (proposedSavingsAmount !== undefined) memberUpdate.proposedSavingsAmount = proposedSavingsAmount;
+      if (empowermentInterest) memberUpdate.empowermentInterest = empowermentInterest;
+
+      if (Object.keys(memberUpdate).length > 0) {
+        await this.dataSource.getRepository(Member).update(user.memberProfile.id, memberUpdate);
+      }
+
+      // Handle Next of Kin
+      if (nokName || nokRelationship || nokPhone || nokAddress || nokEmail) {
+        const nokRepo = this.dataSource.getRepository(NextOfKin);
+        let nok = user.memberProfile.nextOfKin;
+        
+        if (!nok) {
+          nok = nokRepo.create({ memberId: user.memberProfile.id });
+        }
+        
+        if (nokName) nok.name = nokName;
+        if (nokRelationship) nok.relationship = nokRelationship;
+        if (nokPhone) nok.phone = nokPhone;
+        if (nokAddress) nok.address = nokAddress;
+        if (nokEmail) nok.email = nokEmail;
+        
+        await nokRepo.save(nok);
+      }
+    }
+
+    return this.getProfile(userId);
   }
 
   async getPublicOrganisations() {

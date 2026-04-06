@@ -15,12 +15,6 @@ export class Wallet {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({
-    type: 'enum',
-    enum: WalletType,
-  })
-  type: WalletType;
-
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   balance: number;
 

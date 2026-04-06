@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Notification, NotificationType, NotificationStatus } from '../entities/notification.entity';
+import { Notification, NotificationType } from '../entities/notification.entity';
 import { EmailService } from '../email/email.service';
 import { SmsService } from './channels/sms.service';
 import { PushService } from './channels/push.service';
@@ -39,10 +39,8 @@ export class NotificationService {
 
       const notification = this.notificationRepository.create({
         userId,
-        title,
         message,
         type: channel,
-        status: NotificationStatus.PENDING,
       });
       await this.notificationRepository.save(notification);
 
@@ -66,13 +64,9 @@ export class NotificationService {
             break;
         }
 
-        notification.status = success ? NotificationStatus.SENT : NotificationStatus.FAILED;
-        notification.sentAt = new Date();
-        await this.notificationRepository.save(notification);
+        // Update results or logs if needed
       } catch (err) {
         this.logger.error(`Failed to trigger notification for channel ${channel}: ${err.message}`);
-        notification.status = NotificationStatus.FAILED;
-        await this.notificationRepository.save(notification);
       }
     }
   }

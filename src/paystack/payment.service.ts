@@ -10,7 +10,7 @@ import { PaystackConfigService } from './paystack-config.service';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
-  private readonly REGISTRATION_FEE = 550; // NGN
+  private readonly REGISTRATION_FEE = 5500; // NGN
 
   constructor(
     @InjectRepository(Member)
@@ -28,10 +28,14 @@ export class PaymentService {
     });
 
     if (!user || !user.memberProfile) {
-      throw new NotFoundException('Member profile not found');
+      return {
+        status: 'failed',
+        alreadyPaid: false,
+        message: 'Member profile not found',
+      };
     }
 
-    if (user.memberProfile.isRegistrationFeePaid) {
+    if (user.memberProfile.hasPaidRegistrationFee) {
       return {
         status: 'success',
         alreadyPaid: true,
@@ -40,7 +44,11 @@ export class PaymentService {
     }
 
     if (!(await this.paystackConfig.isEnabled())) {
-      throw new BadRequestException('Payment gateway is currently disabled. Please contact support.');
+      return {
+        status: 'failed',
+        alreadyPaid: false,
+        message: 'Payment gateway is currently disabled. Please contact support.',
+      };
     }
 
     try {
@@ -60,13 +68,41 @@ export class PaymentService {
         paymentReference: response.data.reference,
       });
 
+      // 0. Create Pending Transaction record
+      try {
+        const pendingTxn = this.dataSource.getRepository(Transaction).create({
+          reference: `REG-FEE-${response.data.reference}`,
+          type: TransactionType.FEE,
+          amount: this.REGISTRATION_FEE,
+          currency: 'NGN',
+          status: TransactionStatus.PENDING,
+          channel: TransactionChannel.PAYSTACK,
+          memberId: user.memberProfile.id,
+          organisationId: user.memberProfile.organisationId,
+          branchId: user.memberProfile.branchId,
+          groupId: user.memberProfile.groupId,
+          balanceBefore: user.memberProfile.wallet?.balance || 0,
+          balanceAfter: user.memberProfile.wallet?.balance || 0,
+          description: `Membership Registration Fee (Pending) – ${user.email}`,
+          externalReference: response.data.reference,
+          createdAt: new Date(),
+        } as any);
+        await this.dataSource.getRepository(Transaction).save(pendingTxn);
+      } catch (txnError) {
+        this.logger.warn(`Failed to create pending transaction record: ${txnError.message}`);
+      }
+
       return {
         status: 'success',
         data: response.data, // includes authorization_url and reference
       };
     } catch (err) {
       this.logger.error(`Paystack initialization failed for user ${userId} (${user.email}): ${err.message}`, err.stack);
-      throw new BadRequestException(`Payment initialization failed: ${err.message}`);
+      return {
+        status: 'failed',
+        alreadyPaid: false,
+        message: `Payment initialization failed: ${err.message}`,
+      };
     }
   }
 
@@ -84,7 +120,16 @@ export class PaymentService {
       throw new NotFoundException('Member profile not found');
     }
 
-    if (user.memberProfile.isRegistrationFeePaid) {
+    const member = await this.memberRepo.findOne({
+      where: { id: user.memberProfile.id },
+      relations: ['wallet'],
+    });
+
+    if (!member) {
+      throw new NotFoundException('Member profile not found');
+    }
+
+    if (user.memberProfile.hasPaidRegistrationFee) {
       return {
         status: 'success',
         isRegistrationFeePaid: true,
@@ -93,46 +138,151 @@ export class PaymentService {
     }
 
     if (!(await this.paystackConfig.isEnabled())) {
-      throw new BadRequestException('Payment gateway is currently disabled. Please contact support.');
+      await this.recordRegistrationVerificationAttempt(member, {
+        externalReference: reference,
+        amount: 0,
+        status: TransactionStatus.FAILED,
+        description: 'Registration fee verification failed: payment gateway disabled',
+      });
+
+      return {
+        status: 'failed',
+        isRegistrationFeePaid: false,
+        message: 'Payment gateway is currently disabled. Please contact support.',
+      };
     }
 
     try {
       const response = await this.paystackConfig.request<any>('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
       const tx = response?.data;
-
-      if (tx?.status !== 'success') {
-        throw new BadRequestException('Payment not successful yet.');
-      }
+      const paystackStatus = String(tx?.status ?? 'unknown').toLowerCase();
 
       const amountPaid = Number(tx?.amount ?? 0) / 100;
-      if (amountPaid < this.REGISTRATION_FEE) {
-        throw new BadRequestException(
-          `Insufficient payment amount. Expected at least NGN ${this.REGISTRATION_FEE}, got NGN ${amountPaid}.`,
-        );
-      }
+      // Use Paystack transaction reference as canonical id across initialize, verify and webhook flows.
+      const externalReference = tx?.reference ?? reference;
 
       const metadataMemberId = Number(tx?.metadata?.memberId);
       if (metadataMemberId && metadataMemberId !== user.memberProfile.id) {
+        await this.recordRegistrationVerificationAttempt(member, {
+          externalReference,
+          amount: amountPaid,
+          status: TransactionStatus.FAILED,
+          description: `Registration fee verification failed: reference/member mismatch (paystack status: ${paystackStatus})`,
+        });
         throw new ForbiddenException('Payment reference does not belong to this user.');
+      }
+
+      if (paystackStatus !== 'success') {
+        await this.recordRegistrationVerificationAttempt(member, {
+          externalReference,
+          amount: amountPaid,
+          status: paystackStatus === 'failed' ? TransactionStatus.FAILED : TransactionStatus.PENDING,
+          description: `Registration fee payment verification returned status: ${paystackStatus}`,
+        });
+
+        return {
+          status: paystackStatus,
+          isRegistrationFeePaid: false,
+          message: `Payment status from Paystack: ${paystackStatus}. Transaction detail has been saved.`,
+        };
+      }
+
+      if (amountPaid < this.REGISTRATION_FEE) {
+        await this.recordRegistrationVerificationAttempt(member, {
+          externalReference,
+          amount: amountPaid,
+          status: TransactionStatus.FAILED,
+          description: `Registration fee verification failed: insufficient amount (expected NGN ${this.REGISTRATION_FEE}, got NGN ${amountPaid})`,
+        });
+
+        return {
+          status: 'failed',
+          isRegistrationFeePaid: false,
+          message: `Insufficient payment amount. Expected at least NGN ${this.REGISTRATION_FEE}, got NGN ${amountPaid}. Transaction detail has been saved.`,
+        };
       }
 
       await this.handleRegistrationSuccess(
         user.memberProfile.id,
-        tx?.id?.toString() ?? tx?.reference ?? reference,
+        externalReference,
       );
 
       return {
         status: 'success',
         isRegistrationFeePaid: true,
-        message: 'Payment verified. Registration status updated to paid.',
+        hasPaidRegistrationFee: true,
+        message: 'Payment verified. Registration status updated to paid and transaction history saved.',
       };
     } catch (err) {
-      if (err instanceof BadRequestException || err instanceof NotFoundException || err instanceof ForbiddenException) {
+      if (err instanceof NotFoundException || err instanceof ForbiddenException) {
         throw err;
       }
+
+      await this.recordRegistrationVerificationAttempt(member, {
+        externalReference: reference,
+        amount: 0,
+        status: TransactionStatus.PENDING,
+        description: `Registration fee verification failed: ${err?.message ?? 'unknown error'}`,
+      });
+
       this.logger.error(`Payment verification failed for user ${userId}: ${err.message}`, err.stack);
-      throw new BadRequestException(`Payment verification failed: ${err.message}`);
+      return {
+        status: 'pending',
+        isRegistrationFeePaid: false,
+        message: `Payment verification is pending due to connectivity/processing delay: ${err.message}. Transaction detail has been saved.`,
+      };
     }
+  }
+
+  private async recordRegistrationVerificationAttempt(
+    member: Member,
+    input: {
+      externalReference: string;
+      amount: number;
+      status: TransactionStatus;
+      description: string;
+    },
+  ) {
+    const existing = await this.dataSource.getRepository(Transaction).findOne({
+      where: {
+        externalReference: input.externalReference,
+        memberId: member.id,
+      } as any,
+    });
+
+    if (existing) {
+      // Reconcile an existing attempt to the latest known status from Paystack.
+      if (existing.status !== input.status || existing.description !== input.description) {
+        existing.status = input.status;
+        existing.description = input.description;
+        existing.amount = Number(input.amount || 0);
+        existing.completedAt = input.status === TransactionStatus.COMPLETED ? new Date() : existing.completedAt;
+        await this.dataSource.getRepository(Transaction).save(existing);
+      }
+      return;
+    }
+
+    const reference = `REG-FEE-VERIFY-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+    await this.dataSource.getRepository(Transaction).save(
+      this.dataSource.getRepository(Transaction).create({
+        reference,
+        type: TransactionType.FEE,
+        amount: Number(input.amount || 0),
+        currency: 'NGN',
+        status: input.status,
+        channel: TransactionChannel.PAYSTACK,
+        memberId: member.id,
+        organisationId: member.organisationId,
+        branchId: member.branchId,
+        groupId: member.groupId,
+        balanceBefore: member.wallet?.balance || 0,
+        balanceAfter: member.wallet?.balance || 0,
+        description: input.description,
+        externalReference: input.externalReference,
+        completedAt: input.status === TransactionStatus.COMPLETED ? new Date() : null,
+      } as any),
+    );
   }
 
   async handleRegistrationSuccess(memberId: number, reference: string) {
@@ -147,65 +297,86 @@ export class PaymentService {
       });
 
       if (!member) {
-        this.logger.error(`Member ${memberId} not found during payment success handler`);
-        return;
+        throw new Error(`Member ${memberId} not found during payment success handler`);
       }
 
-      if (member.isRegistrationFeePaid) {
+      if (member.hasPaidRegistrationFee) {
         this.logger.warn(`Member ${memberId} already paid. Skipping duplicate logic.`);
+        await queryRunner.rollbackTransaction();
         return;
       }
 
-      // 1. Update Member status
-      await queryRunner.manager.update(Member, memberId, {
-        isRegistrationFeePaid: true,
-        paymentReference: reference,
-        status: 'active',
-        kycStatus: 'verified' // Auto-verify registration after payment
-      });
-
-      // 1.1 Also update user status if needed
-      if (member.user && member.user.status !== 'active') {
-        await queryRunner.manager.update(User, member.user.id, { status: 'active', isVerified: true });
+      // Try to update member status
+      const memberTables = ['members', 'member', '"members"', '"member"'];
+      let memberUpdateSuccess = false;
+      for (const table of memberTables) {
+        try {
+          await queryRunner.query(
+            `UPDATE ${table} SET has_paid_registration_fee = true, payment_reference = $1, status = 'active', kyc_status = 'verified' WHERE id = $2`,
+            [reference, memberId]
+          );
+          memberUpdateSuccess = true;
+          this.logger.log(`Successfully updated member status in table: ${table}`);
+          break;
+        } catch (e) { continue; }
       }
 
-      // 2. Create Transaction
-      const txn = queryRunner.manager.create(Transaction, {
-        reference: `REG-FEE-${reference}`,
-        type: TransactionType.DEPOSIT, 
-        amount: this.REGISTRATION_FEE,
-        currency: 'NGN',
-        status: TransactionStatus.COMPLETED,
-        channel: TransactionChannel.PAYSTACK,
-        memberId: member.id,
-        organisationId: member.organisationId,
-        branchId: member.branchId,
-        groupId: member.groupId,
-        balanceBefore: member.wallet?.balance || 0,
-        balanceAfter: member.wallet?.balance || 0, 
-        description: `Membership Registration Fee – ${member.user?.email}`,
-        externalReference: reference,
-        completedAt: new Date(),
-      } as any);
-      const savedTxn = await queryRunner.manager.save(txn);
+      if (!memberUpdateSuccess) {
+        throw new Error('Failed to update member payment status in any known table variation');
+      }
 
-      // 3. Create Ledger entry
-      const ledger = queryRunner.manager.create(Ledger, {
-        amount: this.REGISTRATION_FEE,
-        type: 'registration_fee',
-        description: `Registration Fee Payment - ${member.user?.email}`,
-        source: 'Paystack',
-        reference: `REG-FEE-${reference}`,
-        status: 'completed',
-        transactionId: savedTxn.id,
-      } as any);
-      await queryRunner.manager.save(ledger);
+      // 1.1 Also update user status and payment status - using Raw SQL for reliability
+      if (member.user) {
+        const userTables = ['users', '"user"', 'user', '"users"'];
+        let userUpdateSuccess = false;
+        for (const table of userTables) {
+          try {
+            await queryRunner.query(
+              `UPDATE ${table} SET status = 'active', is_verified = true, has_paid_registration_fee = true WHERE id = $1`,
+              [member.user.id]
+            );
+            userUpdateSuccess = true;
+            this.logger.log(`Successfully updated user status in table: ${table}`);
+            break;
+          } catch (e) { continue; }
+        }
+        if (!userUpdateSuccess) {
+          this.logger.warn(`Failed to update user status for user ${member.user.id} in any known table variation`);
+        }
+      }
+
+      // Attempt transaction record
+      try {
+        const txn = queryRunner.manager.create(Transaction, {
+          reference: `REG-FEE-${reference}`,
+          type: TransactionType.FEE,
+          amount: this.REGISTRATION_FEE,
+          currency: 'NGN',
+          status: TransactionStatus.COMPLETED,
+          channel: TransactionChannel.PAYSTACK,
+          memberId: member.id,
+          organisationId: member.organisationId,
+          branchId: member.branchId,
+          groupId: member.groupId,
+          balanceBefore: member.wallet?.balance || 0,
+          balanceAfter: member.wallet?.balance || 0, 
+          description: `Membership Registration Fee – ${member.user?.email}`,
+          externalReference: reference,
+          completedAt: new Date(),
+        } as any);
+        await queryRunner.manager.save(txn);
+      } catch (txnError) {
+        this.logger.warn(`Failed to record transaction history: ${txnError.message}`);
+      }
 
       await queryRunner.commitTransaction();
-      this.logger.log(`Member ${memberId} successfully paid registration fee. Status updated to active.`);
+      this.logger.log(`Member ${memberId} registration fee payment processed successfully: REF=${reference}`);
     } catch (err) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`Failed to process registration success for member ${memberId}: ${err.message}`);
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Failed to process registration success for member ${memberId}: ${err.message}`, err.stack);
+      throw err; // RE-THROW so caller knows it failed
     } finally {
       await queryRunner.release();
     }

@@ -10,42 +10,42 @@ export enum VirtualAccountStatus {
   PENDING   = 'pending',
 }
 
-@Entity('user_virtual_accounts')
+@Entity('virtual_accounts')
 export class VirtualAccount {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Index()
-  @Column()
+  @Column({ name: 'user_id' })
   userId: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
   /** Paystack customer code, e.g. CUS_xxxxx */
-  @Column({ nullable: true })
+  @Column({ name: 'paystack_customer_code', nullable: true })
   paystackCustomerCode: string;
 
   /** Paystack dedicated account ID */
-  @Column({ nullable: true })
+  @Column({ name: 'paystack_account_id', nullable: true })
   paystackAccountId: string;
 
   /** The assigned Nigerian bank account number */
   @Index({ unique: true })
-  @Column({ nullable: true })
+  @Column({ name: 'account_number', nullable: true })
   accountNumber: string;
 
   /** Full name on the account */
-  @Column({ nullable: true })
+  @Column({ name: 'account_name', nullable: true })
   accountName: string;
 
   /** Bank name, e.g. "Access Bank" */
-  @Column({ nullable: true })
+  @Column({ name: 'bank_name', nullable: true })
   bankName: string;
 
   /** Paystack bank slug, e.g. "access-bank" */
-  @Column({ nullable: true })
+  @Column({ name: 'bank_slug', nullable: true })
   bankSlug: string;
 
   @Column({ default: 'NGN' })
@@ -62,12 +62,12 @@ export class VirtualAccount {
   balance: number;
 
   /** Raw Paystack response stored for debugging */
-  @Column({ type: 'json', nullable: true })
+  @Column({ name: 'raw_paystack_response', type: 'json', nullable: true })
   rawPaystackResponse: object;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

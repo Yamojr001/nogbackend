@@ -4,6 +4,7 @@ import { ModuleRef } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Loan, LoanStatus } from '../entities/loan.entity';
+import { Member } from '../entities/member.entity';
 import { ApprovalService } from '../approval/approval.service';
 import { ApprovalEngineService } from '../approval/approval-engine.service';
 import { ApprovalStatus } from '../entities/approval.entity';
@@ -50,11 +51,13 @@ export class LoanService {
   }
 
   async requestLoan(userId: number, amount: number, interestRate: number, duration: number): Promise<Loan> {
+    const member = await this.moduleRef.get(getRepositoryToken(Member), { strict: false }).findOne({ where: { userId } });
+    if (!member) throw new NotFoundException('Member profile not found');
+
     const loan = this.loanRepository.create({
-      member: { id: userId } as any,
+      member: { id: member.id } as any,
       amount,
       interestRate,
-      duration,
       status: LoanStatus.PENDING,
     });
     const saved = await this.loanRepository.save(loan);
@@ -71,11 +74,11 @@ export class LoanService {
   }
 
   async findAll(): Promise<Loan[]> {
-    return this.loanRepository.find({ relations: ['member', 'member.user'] });
+    return this.loanRepository.find({ relations: ['member', 'member.user', 'repaymentSchedule'] });
   }
 
   async findOne(id: number): Promise<Loan | null> {
-    return this.loanRepository.findOne({ where: { id }, relations: ['member', 'member.user'] });
+    return this.loanRepository.findOne({ where: { id }, relations: ['member', 'member.user', 'repaymentSchedule'] });
   }
 
   async update(id: number, data: Partial<Loan>): Promise<Loan> {
@@ -136,14 +139,14 @@ export class LoanService {
     }
 
     const loan = await this.findOne(id);
-    if (loan?.member) {
+    if (loan?.member?.user) {
       await this.emailService.queueEmail(
-        loan.member.email,
+        loan.member.user.email,
         'loan_notification',
         'Loan Rejected - Coop-OS',
         'loan_notification',
         {
-          name: loan.member.firstName,
+          name: loan.member.user.firstName,
           status: 'rejected',
           loanId: loan.id,
           amount: loan.amount,

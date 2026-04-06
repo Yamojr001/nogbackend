@@ -12,6 +12,7 @@ import { Wallet, WalletType } from '../entities/wallet.entity';
 import { Transaction, TransactionType, TransactionStatus, TransactionChannel } from '../entities/transaction.entity';
 import { Ledger } from '../entities/ledger.entity';
 import { Audit } from '../entities/audit.entity';
+import { Member } from '../entities/member.entity';
 import { Notification, NotificationType } from '../entities/notification.entity';
 import { PaystackConfigService } from './paystack-config.service';
 import { EmailService } from '../email/email.service';
@@ -108,9 +109,33 @@ export class VirtualAccountService {
     const paystackTxRef: string = data?.id?.toString() ?? reference;
 
     const metadata = data?.metadata;
-    if (metadata?.type === 'registration_fee' && metadata?.memberId) {
-      this.logger.log(`Detected registration fee payment for memberId: ${metadata.memberId}`);
-      await this.paymentService.handleRegistrationSuccess(Number(metadata.memberId), paystackTxRef);
+    const status = data?.status;
+
+    // Best Practice: Always verify status is "success" before giving value
+    if (status && status !== 'success') {
+      this.logger.warn(`Paystack webhook with status "${status}" ignored - ref: ${reference}`);
+      return;
+    }
+
+    // Registration checkout payments do not always include dedicated_account fields.
+    // Finalize registration here from webhook metadata when available.
+    const paymentType = String(metadata?.type ?? '').toLowerCase();
+    if (paymentType === 'registration_fee') {
+      let memberId = Number(metadata?.memberId);
+      const userId = Number(metadata?.userId);
+
+      if (!memberId && userId) {
+        const member = await this.dataSource.getRepository(Member).findOne({ where: { userId } });
+        memberId = Number(member?.id ?? 0);
+      }
+
+      if (!memberId) {
+        this.logger.warn(`Registration webhook missing member identifier - ref: ${reference}`);
+        return;
+      }
+
+      await this.paymentService.handleRegistrationSuccess(memberId, reference || paystackTxRef);
+      this.logger.log(`Registration payment finalized from webhook for member ${memberId}, ref=${reference || paystackTxRef}`);
       return;
     }
 
@@ -149,10 +174,14 @@ export class VirtualAccountService {
       .update(rawBody)
       .digest('hex');
 
-    return crypto.timingSafeEqual(
-      Buffer.from(expectedSig, 'hex'),
-      Buffer.from(signature, 'hex'),
-    );
+    const expectedBuffer = Buffer.from(expectedSig, 'hex');
+    const signatureBuffer = Buffer.from(signature, 'hex');
+
+    if (expectedBuffer.length !== signatureBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
   }
 
   // ─── INTERNAL HELPERS ─────────────────────────────────────────────────────
@@ -236,14 +265,14 @@ export class VirtualAccountService {
     try {
       // Find user's member wallet
       let wallet = await this.walletRepo.findOne({
-        where: { ownerId: va.userId, type: WalletType.MEMBER },
+        where: { ownerId: va.userId, ownerType: WalletType.MEMBER },
       });
 
       if (!wallet) {
         // Auto-create wallet if missing
         wallet = this.walletRepo.create({
           ownerId: va.userId,
-          type: WalletType.MEMBER,
+          ownerType: WalletType.MEMBER,
           balance: 0,
           currency: 'NGN',
           status: 'active',
@@ -260,20 +289,30 @@ export class VirtualAccountService {
       // Update virtual account balance
       await queryRunner.manager.update(VirtualAccount, va.id, { balance: Number(va.balance) + amountNGN });
 
+      // Update Member Contribution Balance (Cumulative Savings)
+      const member = await queryRunner.manager.findOne(Member, { where: { userId: va.userId } });
+      if (member) {
+        member.contributionBalance = Number(member.contributionBalance) + amountNGN;
+        await queryRunner.manager.save(member);
+        this.logger.log(`Updated contribution balance for member ${member.id}: +${amountNGN}`);
+      }
+
       // Create Transaction record
       const txnRef = `PAYSTACK-${paystackTxRef}`;
       const txn = queryRunner.manager.create(Transaction, {
         reference: txnRef,
-        type: TransactionType.DEPOSIT,
+        type: TransactionType.CONTRIBUTION, // Best Practice: Savings deposits use CONTRIBUTION type
         amount: amountNGN,
         currency: 'NGN',
         status: TransactionStatus.COMPLETED,
         channel: TransactionChannel.PAYSTACK,
         toWallet: wallet,
+        memberId: member?.id,
         balanceBefore,
         balanceAfter,
         description: `Virtual account deposit via ${va.bankName}`,
         externalReference: paystackTxRef,
+        organisationId: 1, // Defaulting to main organization
         completedAt: new Date(),
       } as any);
       await queryRunner.manager.save(txn);
@@ -289,6 +328,7 @@ export class VirtualAccountService {
         reference: txnRef,
         status: 'completed',
         transactionId: txn.id,
+        organisationId: 1,
       } as any);
       await queryRunner.manager.save(ledger);
 
@@ -307,10 +347,8 @@ export class VirtualAccountService {
       // In-app notification
       const notification = queryRunner.manager.create(Notification, {
         userId: va.userId,
-        title: '💰 Wallet Credited',
         message: `Your wallet has been credited with NGN ${amountNGN.toLocaleString()}. New balance: NGN ${balanceAfter.toLocaleString()}.`,
         type: NotificationType.IN_APP,
-        isRead: false,
       } as any);
       await queryRunner.manager.save(notification);
 

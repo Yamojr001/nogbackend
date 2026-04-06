@@ -56,14 +56,17 @@ export class MemberService {
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
 
     // Get recent transactions (contributions + loans)
-    const recentActivities = await this.txnRepo.find({
-      where: [
-        { fromWallet: { id: member.wallet?.id } },
-        { toWallet: { id: member.wallet?.id } }
-      ],
-      order: { createdAt: 'DESC' },
-      take: 5,
-    });
+    let recentActivities = [];
+    if (member.wallet?.id) {
+      recentActivities = await this.txnRepo.find({
+        where: [
+          { fromWallet: { id: member.wallet.id } },
+          { toWallet: { id: member.wallet.id } }
+        ],
+        order: { createdAt: 'DESC' },
+        take: 5,
+      });
+    }
 
     // Get empowerment applications
     const applicationsCount = await this.programAppRepo.count({
@@ -98,21 +101,39 @@ export class MemberService {
     return user.memberProfile.wallet;
   }
 
-  async getTransactions(userId: number) {
+  async getTransactions(userId: number, filters: any = {}) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['memberProfile', 'memberProfile.wallet'],
     });
     if (!user?.memberProfile?.wallet) return [];
 
-    return this.txnRepo.find({
-      where: [
-        { fromWallet: { id: user.memberProfile.wallet.id } },
-        { toWallet: { id: user.memberProfile.wallet.id } }
-      ],
-      order: { createdAt: 'DESC' },
-      take: 50,
-    });
+    const walletId = user.memberProfile.wallet.id;
+    const query = this.txnRepo.createQueryBuilder('t')
+      .where('(t.fromWalletId = :walletId OR t.toWalletId = :walletId)', { walletId })
+      .orderBy('t.createdAt', 'DESC');
+
+    if (filters.startDate) {
+      query.andWhere('t.createdAt >= :startDate', { startDate: new Date(filters.startDate) });
+    }
+
+    if (filters.endDate) {
+      const end = new Date(filters.endDate);
+      end.setDate(end.getDate() + 1);
+      query.andWhere('t.createdAt < :endDate', { endDate: end });
+    }
+
+    if (filters.search) {
+      query.andWhere('(t.reference ILIKE :search OR t.externalReference ILIKE :search OR t.description ILIKE :search)', {
+        search: `%${filters.search}%`
+      });
+    }
+
+    if (filters.status) {
+      query.andWhere('t.status = :status', { status: filters.status });
+    }
+
+    return query.take(100).getMany();
   }
 
   async getNotifications(userId: number) {

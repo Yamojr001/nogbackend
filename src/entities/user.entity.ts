@@ -107,6 +107,9 @@ export class User {
   @Column({ name: 'is_verified', default: false })
   isVerified: boolean;
 
+  @Column({ name: 'has_paid_registration_fee', default: false })
+  hasPaidRegistrationFee: boolean;
+
   @Column({ name: 'paystack_customer_code', nullable: true })
   paystackCustomerCode: string;
 

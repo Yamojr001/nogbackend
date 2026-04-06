@@ -1,7 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
-import { User } from './user.entity';
-import { Approval } from './approval.entity';
-import { Branch } from './branch.entity';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Member } from './member.entity';
 import { Organisation } from './organisation.entity';
 import { RepaymentSchedule } from './repayment-schedule.entity';
 
@@ -14,25 +12,23 @@ export enum LoanStatus {
   DEFAULTED = 'defaulted',
 }
 
-@Entity()
+@Entity('loans')
 export class Loan {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User)
-  member: User;
+  @ManyToOne(() => Member)
+  @JoinColumn({ name: 'member_id' })
+  member: Member;
 
-  @Column()
+  @Column({ name: 'member_id' })
   memberId: number;
 
   @Column({ type: 'decimal', precision: 15, scale: 2 })
   amount: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2 })
+  @Column({ name: 'interest_rate', type: 'decimal', precision: 5, scale: 2 })
   interestRate: number;
-
-  @Column()
-  duration: number; // in months
 
   @Column({
     type: 'enum',
@@ -41,26 +37,22 @@ export class Loan {
   })
   status: LoanStatus;
 
-  @ManyToOne(() => Approval, { nullable: true })
-  approval: Approval;
-
-  @ManyToOne(() => Branch, { nullable: true })
-  @JoinColumn()
-  branch: Branch;
-
-  @Column({ nullable: true })
-  branchId: number;
-
   @ManyToOne(() => Organisation)
-  @JoinColumn()
+  @JoinColumn({ name: 'organization_id' })
   organisation: Organisation;
 
-  @Column()
+  @Column({ name: 'organization_id' })
   organisationId: number;
 
   @OneToMany(() => RepaymentSchedule, (schedule) => schedule.loan)
   repaymentSchedule: RepaymentSchedule[];
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({ name: 'approved_at', type: 'timestamp', nullable: true })
+  approvedAt: Date;
+
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

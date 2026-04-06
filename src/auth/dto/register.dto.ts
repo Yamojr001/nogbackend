@@ -2,23 +2,28 @@ import { IsEmail, IsNotEmpty, IsString, IsEnum, MinLength, IsOptional, Matches }
 import { UserRole } from '../../entities/user.entity';
 
 export class RegisterUserDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Matches(/^[A-Za-z\s-]+$/, { message: 'First name must contain only letters, spaces, or hyphens' })
-  firstName: string;
+  firstName?: string;
+
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Matches(/^[A-Za-z\s-]+$/, { message: 'Last name must contain only letters, spaces, or hyphens' })
-  lastName: string;
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
 
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Matches(/^\+?[0-9]{10,15}$/, { message: 'Invalid phone number format' })
-  phone: string;
+  phone?: string;
 
   @IsString()
   @IsNotEmpty()

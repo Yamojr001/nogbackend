@@ -325,7 +325,7 @@ export class WalletService {
 
     try {
       const wallet = await queryRunner.manager.findOne(Wallet, {
-        where: { ownerId: memberId, type: WalletType.MEMBER },
+        where: { ownerId: memberId, ownerType: WalletType.MEMBER },
         lock: { mode: 'pessimistic_write' },
       });
 

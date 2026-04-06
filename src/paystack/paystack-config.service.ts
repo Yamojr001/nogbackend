@@ -58,7 +58,8 @@ export class PaystackConfigService {
   }
 
   async isEnabled(): Promise<boolean> {
-    const val = await this.get('paystack.enabled', 'false');
+    const envEnabled = String(process.env.PAYSTACK_ENABLED ?? 'false').toLowerCase();
+    const val = await this.get('paystack.enabled', envEnabled);
     return val === 'true';
   }
 

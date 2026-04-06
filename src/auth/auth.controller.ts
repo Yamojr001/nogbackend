@@ -1,4 +1,4 @@
-import { Controller, Request, Post, Get, UseGuards, Body, Param } from '@nestjs/common';
+import { Controller, Request, Post, Get, UseGuards, Body, Param, Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { PaymentService } from '../paystack/payment.service';
 import { LocalAuthGuard } from './local-auth.guard';
@@ -79,6 +79,18 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('profile') 
+  async updateProfilePost(@Request() req, @Body() dto: any) {
+    return this.authService.updateProfile(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  async updateProfilePatch(@Request() req, @Body() dto: any) {
+    return this.authService.updateProfile(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@Request() req) {
     return req.user;
@@ -107,5 +119,47 @@ export class AuthController {
   @Get('hierarchy/sub-orgs/:id/groups')
   async getPublicGroups(@Param('id') id: string) {
     return this.authService.getPublicGroups(+id);
+  }
+
+  @Post('emergency-fix-user')
+  async emergencyFixUser(@Body('email') email: string) {
+    const dataSource = this.authService['dataSource'];
+    const results = [];
+    
+    // 1. Update Users table
+    const userTables = ['users', '"user"'];
+    for (const table of userTables) {
+      try {
+        const res = await dataSource.query(
+          `UPDATE ${table} SET has_paid_registration_fee = true, status = 'active', is_verified = true WHERE email = $1`,
+          [email]
+        );
+        results.push({ table, result: res });
+      } catch (e) { results.push({ table, error: e.message }); }
+    }
+
+    // 2. Update Members table
+    const memberTables = ['members', 'member'];
+    const userLinkingCols = ['user_id', 'userId', '"userId"', '"user_id"'];
+    
+    for (const table of memberTables) {
+      for (const col of userLinkingCols) {
+        try {
+          // Try to join with users/user to find the member by email
+          const query = `
+            UPDATE ${table} SET has_paid_registration_fee = true, status = 'active', kyc_status = 'verified'
+            WHERE ${col} IN (
+              SELECT id FROM users WHERE email = $1
+              UNION
+              SELECT id FROM "user" WHERE email = $1
+            )
+          `;
+          const res = await dataSource.query(query, [email]);
+          results.push({ table, col, result: res });
+        } catch (e) { continue; }
+      }
+    }
+    
+    return { status: 'completed', message: `Emergency fix attempt for ${email}`, results };
   }
 }

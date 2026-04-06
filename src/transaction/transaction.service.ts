@@ -10,15 +10,51 @@ export class TransactionService {
     private repo: Repository<Transaction>,
   ) {}
 
-  async findAll(organisationId?: number) {
-    const where: any = {};
-    if (organisationId) where.organisationId = organisationId;
-    return this.repo.find({
-      where,
-      relations: ['fromWallet', 'toWallet', 'member', 'organisation'],
-      order: { createdAt: 'DESC' },
-      take: 200,
-    });
+  async findAll(filters: {
+    organisationId?: number;
+    memberId?: number;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    status?: string;
+  }) {
+    const query = this.repo.createQueryBuilder('t')
+      .leftJoinAndSelect('t.member', 'member')
+      .leftJoinAndSelect('t.organisation', 'organisation')
+      .leftJoinAndSelect('t.fromWallet', 'fromWallet')
+      .leftJoinAndSelect('t.toWallet', 'toWallet')
+      .orderBy('t.createdAt', 'DESC');
+
+    if (filters.organisationId) {
+      query.andWhere('t.organisationId = :orgId', { orgId: filters.organisationId });
+    }
+
+    if (filters.memberId) {
+      query.andWhere('t.memberId = :memberId', { memberId: filters.memberId });
+    }
+
+    if (filters.status) {
+      query.andWhere('t.status = :status', { status: filters.status });
+    }
+
+    if (filters.startDate) {
+      query.andWhere('t.createdAt >= :startDate', { startDate: new Date(filters.startDate) });
+    }
+
+    if (filters.endDate) {
+      // Add one day to end date to include the entire day
+      const end = new Date(filters.endDate);
+      end.setDate(end.getDate() + 1);
+      query.andWhere('t.createdAt < :endDate', { endDate: end });
+    }
+
+    if (filters.search) {
+      query.andWhere('(t.reference ILIKE :search OR t.externalReference ILIKE :search OR t.description ILIKE :search)', { 
+        search: `%${filters.search}%` 
+      });
+    }
+
+    return query.take(200).getMany();
   }
 
   async findOne(id: number) {

@@ -117,8 +117,8 @@ export class Member {
   @Column({ name: 'registration_officer_id', nullable: true })
   registrationOfficerId: number;
 
-  @Column({ name: 'is_registration_fee_paid', default: false })
-  isRegistrationFeePaid: boolean;
+  @Column({ name: 'has_paid_registration_fee', default: false })
+  hasPaidRegistrationFee: boolean;
 
   @Column({ name: 'payment_reference', nullable: true })
   paymentReference: string;

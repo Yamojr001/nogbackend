@@ -1,12 +1,13 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Req, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { RegistrationFeeGuard } from '../auth/registration-fee.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../entities/user.entity';
 import { MemberService } from './member.service';
 
 @Controller('member')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, RegistrationFeeGuard)
 @Roles(UserRole.MEMBER, UserRole.GROUP_ADMIN, UserRole.GROUP_TREASURER, UserRole.GROUP_SECRETARY)
 export class MemberController {
   constructor(private readonly memberService: MemberService) {}
@@ -37,8 +38,8 @@ export class MemberController {
   }
 
   @Get('transactions')
-  async getTransactions(@Req() req: any) {
-    return this.memberService.getTransactions(req.user.userId);
+  async getTransactions(@Req() req: any, @Query() query: any) {
+    return this.memberService.getTransactions(req.user.userId, query);
   }
 
   @Get('notifications')
