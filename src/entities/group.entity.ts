@@ -8,6 +8,9 @@ export class Group {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ unique: true, nullable: true })
+  code: string; 
+
   @Column()
   name: string;
 

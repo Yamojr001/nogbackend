@@ -10,6 +10,9 @@ export class Branch {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ unique: true, nullable: true })
+  code: string; 
+
   @Column()
   name: string; // e.g., "Abuja Branch"
 

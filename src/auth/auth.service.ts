@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,8 +9,9 @@ import { DataSource, QueryFailedError } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
 import { Member } from '../entities/member.entity';
 import { Wallet, WalletType } from '../entities/wallet.entity';
-import { Organisation } from '../entities/organisation.entity';
+import { Organisation, OrganisationType } from '../entities/organisation.entity';
 import { Group } from '../entities/group.entity';
+import { Branch } from '../entities/branch.entity';
 import { Audit } from '../entities/audit.entity';
 import { RegisterUserDto } from './dto/register.dto';
 import { EmailService } from '../email/email.service';
@@ -377,33 +378,25 @@ export class AuthService {
       throw new UnauthorizedException('Invalid role provided');
     }
 
-    // 1. Resolve Organisation if code provided
-    let org: Organisation | null = null;
+    // 1. Resolve Organisation/Branch/Group if code provided
     if (organisationCode) {
-      try {
-        org = await this.dataSource.getRepository(Organisation).findOne({
-          where: { code: organisationCode },
-          // Select only columns needed for registration to support older DB schemas.
-          select: ['id', 'code', 'name'] as (keyof Organisation)[],
-        });
-      } catch (error) {
-        if (!this.isMissingColumnError(error)) {
-          throw error;
-        }
-
-        const rows = await this.dataSource.query(
-          `SELECT id, code, name
-           FROM organizations
-           WHERE code = $1
-           LIMIT 1`,
-          [organisationCode],
-        );
-
-        org = rows.length ? ({ id: rows[0].id, code: rows[0].code, name: rows[0].name } as Organisation) : null;
+      const resolved = await this.resolveOrgCode(organisationCode);
+      if (!resolved) {
+        throw new UnauthorizedException('Invalid organization/group code');
       }
-
-      if (!org) throw new UnauthorizedException('Invalid organisation code');
-      organisationId = org.id;
+      organisationId = resolved.organisationId;
+      dto.branchId = resolved.branchId || dto.branchId;
+      dto.groupId = resolved.groupId || dto.groupId;
+      dto.subOrgId = resolved.subOrgId || dto.subOrgId;
+    } else if (!organisationId) {
+      // Default to Apex if no code/ID provided
+      const apex = await this.dataSource.getRepository(Organisation).findOne({
+        where: { type: OrganisationType.APEX },
+        select: ['id']
+      });
+      if (apex) {
+        organisationId = apex.id;
+      }
     }
 
     if (!organisationId && role !== UserRole.SUPER_ADMIN) {
@@ -766,46 +759,29 @@ export class AuthService {
         throw error;
       }
 
-      // Fallback for profile retrieval in restricted schemas
-      const tablesToTry = ['users', '"user"'];
-      for (const table of tablesToTry) {
-        try {
-          const tableNameForQuery = table.replace(/"/g, '');
-          const columnRows = await this.dataSource.query(
-            `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
-            [tableNameForQuery]
-          );
-          const availableCols = new Set(columnRows.map((c: any) => c.column_name));
+      // Fast fallback for profile retrieval
+      const rows = await this.dataSource.query(
+        `SELECT id, email, role, name, status, is_verified, has_paid_registration_fee 
+         FROM users WHERE id = $1 LIMIT 1`,
+        [userId]
+      ).catch(() => this.dataSource.query(
+        `SELECT id, email, role, name, status, is_verified FROM "user" WHERE id = $1 LIMIT 1`,
+        [userId]
+      ));
 
-          const selectFields = ['id', 'email', 'role', 'name', 'first_name', 'last_name', 'phone', 'status', 'is_verified', 'has_paid_registration_fee', 'organization_id', 'branch_id'];
-          const activeFields = selectFields.filter(f => {
-            const dbName = f.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            return availableCols.has(dbName) || availableCols.has(f);
-          });
-
-          const rows = await this.dataSource.query(
-            `SELECT ${activeFields.join(', ')} FROM ${table} WHERE id = $1 LIMIT 1`,
-            [userId]
-          );
-          if (rows.length > 0) {
-            const row = rows[0];
-            user = {
-              id: row.id,
-              email: row.email,
-              role: row.role,
-              name: row.name,
-              firstName: row.first_name,
-              lastName: row.last_name,
-              phone: row.phone,
-              status: row.status,
-              isVerified: row.is_verified,
-              hasPaidRegistrationFee: Boolean(row.has_paid_registration_fee ?? false),
-              organisationId: row.organization_id,
-              branchId: row.branch_id,
-            };
-            break;
-          }
-        } catch (e) { continue; }
+      if (rows && rows.length > 0) {
+        const row = rows[0];
+        user = {
+          id: row.id,
+          email: row.email,
+          role: row.role,
+          name: row.name,
+          status: row.status,
+          isVerified: row.is_verified,
+          has_paid_registration_fee: Boolean(row.has_paid_registration_fee ?? false),
+          organisationId: row.organization_id || null,
+          branchId: row.branch_id || null,
+        } as any;
       }
     }
 
@@ -832,60 +808,88 @@ export class AuthService {
   async updateProfile(userId: number, dto: any) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['memberProfile', 'memberProfile.nextOfKin']
+      relations: ['memberProfile', 'memberProfile.nextOfKin'],
     });
-
-    if (!user) throw new UnauthorizedException('User not found');
+    if (!user) throw new NotFoundException('User not found');
 
     const { 
-      name, firstName, lastName, phone, address, phoneNumber,
-      gender, dateOfBirth, maritalStatus, stateOfOrigin, nationality,
+      name, firstName, lastName, phone, phoneNumber, 
+      organisationCode,
+      address, gender, dateOfBirth, maritalStatus, stateOfOrigin, nationality,
       occupation, educationalQualification,
       extOrgName, extPosition, extStateChapter,
       savingsFrequency, proposedSavingsAmount, empowermentInterest,
       nokName, nokRelationship, nokPhone, nokAddress, nokEmail
     } = dto;
 
-    // Update User entity
-    const userUpdate: Partial<User> = {};
-    if (name) userUpdate.name = name;
-    if (firstName) userUpdate.firstName = firstName;
-    if (lastName) userUpdate.lastName = lastName;
-    if (phone || phoneNumber) userUpdate.phone = phone || phoneNumber;
+    // Handle Organisation Code Resolution if provided
+    if (organisationCode !== undefined) {
+      if (organisationCode) {
+        const resolved = await this.resolveOrgCode(organisationCode);
+        user.organisationId = resolved.organisationId;
+        user.branchId = resolved.branchId;
+        // Update user-level fields
+        await this.userRepository.save(user);
 
-    if (Object.keys(userUpdate).length > 0) {
-      await this.userRepository.update(userId, userUpdate);
+        // Update member-level fields if exists
+        if (user.memberProfile) {
+          user.memberProfile.organisationId = resolved.organisationId;
+          user.memberProfile.branchId = resolved.branchId;
+          user.memberProfile.groupId = resolved.groupId;
+          await this.dataSource.getRepository(Member).save(user.memberProfile);
+        }
+      } else {
+        // Default to Apex if code is explicitly cleared
+        const orgRepo = this.dataSource.getRepository(Organisation);
+        const apex = await orgRepo.findOne({ where: { type: 'apex' as any } });
+        user.organisationId = apex?.id || null;
+        user.branchId = null;
+        await this.userRepository.save(user);
+
+        if (user.memberProfile) {
+          user.memberProfile.organisationId = apex?.id || null;
+          user.memberProfile.branchId = null;
+          user.memberProfile.groupId = null;
+          await this.dataSource.getRepository(Member).save(user.memberProfile);
+        }
+      }
     }
 
-    // Update Member entity
-    if (user.memberProfile) {
-      const memberUpdate: any = {};
-      if (address) memberUpdate.address = address;
-      if (gender) memberUpdate.gender = gender;
-      if (dateOfBirth) memberUpdate.dateOfBirth = dateOfBirth;
-      if (maritalStatus) memberUpdate.maritalStatus = maritalStatus;
-      if (stateOfOrigin) memberUpdate.stateOfOrigin = stateOfOrigin;
-      if (nationality) memberUpdate.nationality = nationality;
-      if (occupation) memberUpdate.occupation = occupation;
-      if (educationalQualification) memberUpdate.educationalQualification = educationalQualification;
-      if (extOrgName) memberUpdate.extOrgName = extOrgName;
-      if (extPosition) memberUpdate.extPosition = extPosition;
-      if (extStateChapter) memberUpdate.extStateChapter = extStateChapter;
-      if (savingsFrequency) memberUpdate.savingsFrequency = savingsFrequency;
-      if (proposedSavingsAmount !== undefined) memberUpdate.proposedSavingsAmount = proposedSavingsAmount;
-      if (empowermentInterest) memberUpdate.empowermentInterest = empowermentInterest;
+    // Update User level fields
+    if (name) user.name = name;
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
+    if (phone || phoneNumber) user.phone = phone || phoneNumber;
 
-      if (Object.keys(memberUpdate).length > 0) {
-        await this.dataSource.getRepository(Member).update(user.memberProfile.id, memberUpdate);
-      }
+    await this.userRepository.save(user);
+
+    // Update Member Profile level fields (if member)
+    if (user.memberProfile) {
+      const member = user.memberProfile;
+      if (address !== undefined) member.address = address;
+      if (gender !== undefined) member.gender = gender;
+      if (dateOfBirth !== undefined) member.dateOfBirth = dateOfBirth;
+      if (maritalStatus !== undefined) member.maritalStatus = maritalStatus;
+      if (stateOfOrigin !== undefined) member.stateOfOrigin = stateOfOrigin;
+      if (nationality !== undefined) member.nationality = nationality;
+      if (occupation !== undefined) member.occupation = occupation;
+      if (educationalQualification !== undefined) member.educationalQualification = educationalQualification;
+      if (extOrgName !== undefined) member.extOrgName = extOrgName;
+      if (extPosition !== undefined) member.extPosition = extPosition;
+      if (extStateChapter !== undefined) member.extStateChapter = extStateChapter;
+      if (savingsFrequency !== undefined) member.savingsFrequency = savingsFrequency;
+      if (proposedSavingsAmount !== undefined) member.proposedSavingsAmount = proposedSavingsAmount;
+      if (empowermentInterest !== undefined) member.empowermentInterest = empowermentInterest;
+
+      await this.dataSource.getRepository(Member).save(member);
 
       // Handle Next of Kin
       if (nokName || nokRelationship || nokPhone || nokAddress || nokEmail) {
+        let nok = member.nextOfKin;
         const nokRepo = this.dataSource.getRepository(NextOfKin);
-        let nok = user.memberProfile.nextOfKin;
         
         if (!nok) {
-          nok = nokRepo.create({ memberId: user.memberProfile.id });
+          nok = nokRepo.create({ memberId: member.id });
         }
         
         if (nokName) nok.name = nokName;
@@ -920,5 +924,111 @@ export class AuthService {
       select: ['id', 'name'],
       where: { organisation: { id: subOrgId } as any, status: 'active' as any }
     });
+  }
+  /**
+   * Resolves a unique code into its organizational hierarchy.
+   * Checks Groups, then Branches, then Organisations.
+   */
+  async resolveOrgCode(code: string) {
+    // 1. Check Groups
+    const foundGroup = await this.dataSource.getRepository(Group).findOne({
+      where: { code },
+      relations: ['organisation', 'branch'],
+    });
+    if (foundGroup) {
+      return {
+        organisationId: foundGroup.organisationId,
+        branchId: foundGroup.branchId,
+        groupId: foundGroup.id,
+        subOrgId: foundGroup.organisation?.type === 'sub_org' ? foundGroup.organisationId : null,
+      };
+    }
+
+    // 2. Check Branches
+    const foundBranch = await this.dataSource.getRepository(Branch).findOne({
+      where: { code },
+      relations: ['organisation'],
+    });
+    if (foundBranch) {
+      return {
+        organisationId: foundBranch.organisationId,
+        branchId: foundBranch.id,
+        groupId: null,
+        subOrgId: foundBranch.organisation?.type === 'sub_org' ? foundBranch.organisationId : null,
+      };
+    }
+
+    // 3. Check Organisations (Apex, Partner, Sub-Org)
+    const foundOrg = await this.dataSource.getRepository(Organisation).findOne({
+      where: { code },
+    });
+    if (foundOrg) {
+      return {
+        organisationId: foundOrg.id,
+        branchId: null,
+        groupId: null,
+        subOrgId: foundOrg.type === 'sub_org' ? foundOrg.id : null,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Returns a descriptive name and hierarchy for a unique code.
+   */
+  async getOrgHierarchy(code: string) {
+    const resolved = await this.resolveOrgCode(code);
+    if (!resolved) return null;
+
+    // 1. Resolve Group
+    if (resolved.groupId) {
+      const group = await this.dataSource.getRepository(Group).findOne({
+        where: { id: resolved.groupId },
+        relations: ['organisation', 'branch'],
+      });
+      if (group) {
+        return {
+          name: group.name,
+          type: 'Group',
+          hierarchy: `${group.branch?.name || 'Main'} > ${group.organisation?.name || 'NOGALSS'}`,
+          full: `${group.name} (${group.branch?.name || 'Main'} > ${group.organisation?.name || 'NOGALSS'})`,
+        };
+      }
+    }
+
+    // 2. Resolve Branch
+    if (resolved.branchId) {
+      const branch = await this.dataSource.getRepository(Branch).findOne({
+        where: { id: resolved.branchId },
+        relations: ['organisation'],
+      });
+      if (branch) {
+        return {
+          name: branch.name,
+          type: 'Branch',
+          hierarchy: branch.organisation?.name || 'NOGALSS',
+          full: `${branch.name} (${branch.organisation?.name || 'NOGALSS'})`,
+        };
+      }
+    }
+
+    // 3. Resolve Organisation
+    if (resolved.organisationId) {
+      const org = await this.dataSource.getRepository(Organisation).findOne({
+        where: { id: resolved.organisationId },
+        relations: ['parent'],
+      });
+      if (org) {
+        return {
+          name: org.name,
+          type: org.type === 'apex' ? 'Apex' : (org.type === 'partner' ? 'Partner' : 'Sub-Org'),
+          hierarchy: org.parent?.name || (org.type === 'apex' ? 'National' : 'NOGALSS'),
+          full: `${org.name} (${org.parent?.name || 'National'})`,
+        };
+      }
+    }
+
+    return null;
   }
 }

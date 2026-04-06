@@ -111,6 +111,11 @@ export class AuthController {
     return this.authService.getPublicOrganisations();
   }
 
+  @Get('resolve-code/:code')
+  async resolveCode(@Param('code') code: string) {
+    return this.authService.getOrgHierarchy(code);
+  }
+
   @Get('hierarchy/organisations/:id/sub-orgs')
   async getPublicSubOrgs(@Param('id') id: string) {
     return this.authService.getPublicSubOrgs(+id);

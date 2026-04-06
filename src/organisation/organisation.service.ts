@@ -16,25 +16,32 @@ export class OrganisationService {
   ) {}
 
   async create(data: CreateOrganisationDto): Promise<Organisation> {
-    if (data.parentId) {
-      const parent = await this.organisationRepository.findOne({ where: { id: data.parentId } });
-      if (!parent) throw new Error('Parent organization not found');
+    const parentCode = (data as any).parentOrgCode;
+    
+    if (parentCode) {
+      const parent = await this.organisationRepository.findOne({ where: { code: parentCode } });
+      if (!parent) throw new Error('Parent organization with this code not found');
       
       // Hierarchy validation
       if (data.type === 'sub_org' && parent.type !== 'partner') {
         throw new Error('Sub-Organization must belong to a Partner Organization');
       }
-      if (data.type === 'partner' && parent) {
-        throw new Error('Partner Organization cannot have a parent');
+      if (data.type === 'partner' && parent.type !== 'apex') {
+        throw new Error('Partner Organization must belong to the National Apex');
       }
       
+      (data as any).parent = parent;
+    } else if (data.parentId) {
+      const parent = await this.organisationRepository.findOne({ where: { id: data.parentId } });
+      if (!parent) throw new Error('Parent organization not found');
       (data as any).parent = parent;
     } else if (data.type === 'sub_org') {
        throw new Error('Sub-Organization must have a parent Partner Organization');
     }
 
-    // Generate unique code
-    (data as any).code = await this.generateCode(data.type);
+    // Generate unique modern code (XX-0000)
+    const { generateOrgCode } = require('../utils/code-generator.util');
+    (data as any).code = generateOrgCode();
 
     const org = this.organisationRepository.create(data as any) as any;
     return this.organisationRepository.save(org as any);
