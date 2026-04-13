@@ -74,7 +74,10 @@ import { PaystackModule } from './paystack/paystack.module';
 import { VirtualAccount } from './entities/virtual-account.entity';
 import { SupportModule } from './support/support.module';
 import { BanksModule } from './banks/banks.module';
+import { TokenModule } from './token/token.module';
+import { MonnifyModule } from './monnify/monnify.module';
 import { Bank } from './entities/bank.entity';
+import { Token } from './entities/token.entity';
 
 @Module({
   imports: [
@@ -111,7 +114,7 @@ import { Bank } from './entities/bank.entity';
             Collection, BranchTarget, BranchExpense,
             Attendance, Meeting, SupportTicket, Guarantor, Beneficiary, EmailLog, OtpCode, SmsLog, UserTour,
             BankAccount, NextOfKin, EmpowermentProgram, ProgramApplication,
-            VirtualAccount, Bank
+            VirtualAccount, Bank, Token
           ],
           synchronize,
           ssl: config.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
@@ -146,6 +149,8 @@ import { Bank } from './entities/bank.entity';
     PaystackModule,
     SupportModule,
     BanksModule,
+    TokenModule,
+    MonnifyModule,
   ],
   providers: [
     {

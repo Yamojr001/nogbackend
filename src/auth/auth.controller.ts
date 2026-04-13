@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { PaymentService } from '../paystack/payment.service';
 import { LocalAuthGuard } from './local-auth.guard';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { Public } from './public.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -11,11 +12,13 @@ export class AuthController {
     private paymentService: PaymentService,
   ) { }
 
+  @Public()
   @Get('health')
   async health() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
+  @Public()
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Request() req) {
@@ -24,6 +27,7 @@ export class AuthController {
     return this.authService.login(req.user, ip, userAgent);
   }
 
+  @Public()
   @Post('google')
   async googleLogin(@Request() req, @Body('idToken') idToken: string) {
     const ip = req.headers['x-forwarded-for'] || req.ip;
@@ -44,6 +48,7 @@ export class AuthController {
     return await this.authService['otpService'].verifyOtp(req.user.userId, dto.purpose as any, dto.code);
   }
 
+  @Public()
   @Post('register')
   async register(@Body() dto: any) {
     return this.authService.register(dto);
@@ -96,31 +101,37 @@ export class AuthController {
     return req.user;
   }
 
+  @Public()
   @Post('forgot-password')
   async forgotPassword(@Body('email') email: string) {
     return this.authService.forgotPassword(email);
   }
 
+  @Public()
   @Post('reset-password')
   async resetPassword(@Body() dto: { token: string, password: string }) {
     return this.authService.resetPassword(dto.token, dto.password);
   }
 
+  @Public()
   @Get('hierarchy/organisations')
   async getPublicOrganisations() {
     return this.authService.getPublicOrganisations();
   }
 
+  @Public()
   @Get('resolve-code/:code')
   async resolveCode(@Param('code') code: string) {
     return this.authService.getOrgHierarchy(code);
   }
 
+  @Public()
   @Get('hierarchy/organisations/:id/sub-orgs')
   async getPublicSubOrgs(@Param('id') id: string) {
     return this.authService.getPublicSubOrgs(+id);
   }
 
+  @Public()
   @Get('hierarchy/sub-orgs/:id/groups')
   async getPublicGroups(@Param('id') id: string) {
     return this.authService.getPublicGroups(+id);

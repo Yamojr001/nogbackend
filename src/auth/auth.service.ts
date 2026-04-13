@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -25,6 +25,7 @@ import { ApprovalEngineService } from '../approval/approval-engine.service';
 import { NextOfKin } from '../entities/next-of-kin.entity';
 import { BankAccount, OwnerType } from '../entities/bank-account.entity';
 import { PaymentService } from '../paystack/payment.service';
+import { TokenService } from '../token/token.service';
 
 @Injectable()
 export class AuthService {
@@ -253,12 +254,11 @@ export class AuthService {
     private jwtService: JwtService,
     private dataSource: DataSource,
     private emailService: EmailService,
-    private notificationService: NotificationService,
-    private otpService: OtpService,
-    private securityService: SecurityService,
-    private encryptionService: EncryptionService,
-    private approvalEngine: ApprovalEngineService,
-    private paymentService: PaymentService,
+    private readonly notificationService: NotificationService,
+    private readonly otpService: OtpService,
+    private readonly securityService: SecurityService,
+    private readonly approvalEngine: ApprovalEngineService,
+    private readonly tokenService: TokenService,
   ) {}
 
   private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -361,10 +361,17 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
-
   async register(dto: RegisterUserDto) {
-    const { email, password, firstName, lastName, phone, role } = dto;
+    const { email, password, firstName, lastName, phone, role, token } = dto;
     let { organisationId, organisationCode } = dto;
+
+    if (role === UserRole.MEMBER && !token) {
+       throw new BadRequestException('Registration token is required for members.');
+    }
+
+    if (token) {
+       await this.tokenService.validateToken(token);
+    }
 
     const normalizedRole = (() => {
       if (!role) return UserRole.MEMBER;
@@ -444,7 +451,9 @@ export class AuthService {
         phone: phone || null,
         role: normalizedRole,
         organisation: { id: organisationId } as Organisation,
-        status: 'pending',
+        status: token ? 'active' : 'pending',
+        isVerified: token ? true : false,
+        hasPaidRegistrationFee: token ? true : false,
         nin: dto.nin || null,
         bvn: dto.bvn || null,
       });
@@ -497,8 +506,9 @@ export class AuthService {
         savingsFrequency: dto.savingsFrequency,
         proposedSavingsAmount: dto.proposedSavingsAmount,
         empowermentInterest: dto.empowermentInterest,
-        kycStatus: 'pending',
-        status: 'pending',
+        kycStatus: token ? 'verified' : 'pending',
+        status: token ? 'active' : 'pending',
+        hasPaidRegistrationFee: token ? true : false,
       });
 
       // 8. Create Next of Kin
@@ -511,6 +521,11 @@ export class AuthService {
           address: dto.nokAddress,
         });
         await queryRunner.manager.save(nok);
+      }
+
+      // 9. Mark Token as used
+      if (token) {
+        await this.tokenService.markTokenAsUsed(token, savedUser.id);
       }
 
       await queryRunner.commitTransaction();
@@ -549,31 +564,15 @@ export class AuthService {
       console.error('[Auth] Registration post-processing error:', postErr.message);
     }
 
-    // 9. Payment Initialization (For Members)
+    // 9. Return success or login tokens
     if (normalizedRole === UserRole.MEMBER) {
-      try {
-        const payRes = await this.paymentService.initializeRegistrationPayment(savedUser.id);
-        return {
-          status: 'success',
-          needsPayment: true,
-          paymentUrl: payRes.data.authorization_url,
-          message: 'Registration successful. Please complete payment to activate your account.',
-        };
-      } catch (payErr) {
-        console.error('[Auth] Payment initialization failed:', payErr.message);
-        // Fallback: registration succeeded but payment failed to initialize
-        // We still return success but notify that payment needs to be done later
-        return {
-          status: 'success',
-          needsPayment: true,
-          paymentUrl: null,
-          message: 'Registration saved but payment initialization failed. You can pay later from your dashboard.',
-          error: payErr.message,
-        };
-      }
+      return {
+        status: 'success',
+        needsPayment: false,
+        message: 'Registration successful. You can now login.',
+      };
     }
 
-    // Default: Login and return tokens for non-member roles (Admin, Officer, etc.)
     const tokens = await this.login(savedUser);
     return {
       status: 'success',
@@ -715,7 +714,8 @@ export class AuthService {
 
   async generateRefreshToken(user: any): Promise<string> {
     const payload = { sub: user.id };
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
+    const secret = process.env.JWT_REFRESH_SECRET || 'nogalss-super-refresh-secret-jwt-key-2026';
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d', secret });
     try {
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
       await this.safeUserUpdate(user.id, { refreshTokenHash });
@@ -728,16 +728,28 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     try {
-      const payload = this.jwtService.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET || 'refresh-secret' });
+      const secret = process.env.JWT_REFRESH_SECRET || 'nogalss-super-refresh-secret-jwt-key-2026';
+      const payload = this.jwtService.verify(refreshToken, { secret });
       const user = await this.userRepository.findOne({ where: { id: payload.sub }, relations: ['organisation'] });
       
-      if (!user || !user.refreshTokenHash) throw new UnauthorizedException();
+      if (!user) {
+        console.warn(`[Auth] Refresh failed: User ${payload.sub} not found`);
+        throw new UnauthorizedException();
+      }
+      if (!user.refreshTokenHash) {
+        console.warn(`[Auth] Refresh failed: User ${user.email} has no stored refresh token hash`);
+        throw new UnauthorizedException();
+      }
       
       const isMatch = await bcrypt.compare(refreshToken, user.refreshTokenHash);
-      if (!isMatch) throw new UnauthorizedException();
+      if (!isMatch) {
+        console.warn(`[Auth] Refresh failed: Token mismatch for user ${user.email}`);
+        throw new UnauthorizedException();
+      }
 
       return this.login(user);
     } catch (error) {
+      console.error(`[Auth] Refresh error: ${error.message}`);
       throw new UnauthorizedException();
     }
   }

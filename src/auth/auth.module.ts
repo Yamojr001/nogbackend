@@ -19,6 +19,7 @@ import { NotificationModule } from '../notification/notification.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { ApprovalModule } from '../approval/approval.module';
 import { PaystackModule } from '../paystack/paystack.module';
+import { TokenModule } from '../token/token.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PaystackModule } from '../paystack/paystack.module';
     TypeOrmModule.forFeature([User, Member, Wallet, Organisation, Audit]),
     PassportModule,
     NotificationModule,
+    TokenModule,
     forwardRef(() => WalletModule),
     forwardRef(() => ApprovalModule),
     PaystackModule,

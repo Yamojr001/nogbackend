@@ -97,12 +97,71 @@ export class PaymentService {
         data: response.data, // includes authorization_url and reference
       };
     } catch (err) {
-      this.logger.error(`Paystack initialization failed for user ${userId} (${user.email}): ${err.message}`, err.stack);
+    }
+  }
+
+  async initializeExternalPayment(email: string) {
+    if (!(await this.paystackConfig.isEnabled())) {
+      throw new BadRequestException('Payment gateway is currently disabled.');
+    }
+
+    try {
+      const response = await this.paystackConfig.request<any>('POST', '/transaction/initialize', {
+        email: email,
+        amount: this.REGISTRATION_FEE * 100,
+        callback_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/register/payment-success`,
+        metadata: {
+          email: email,
+          type: 'registration_fee',
+          isExternal: true,
+        },
+      });
+
       return {
-        status: 'failed',
-        alreadyPaid: false,
-        message: `Payment initialization failed: ${err.message}`,
+        status: 'success',
+        data: response.data,
       };
+    } catch (err) {
+      this.logger.error(`Paystack initialization failed for external email ${email}: ${err.message}`);
+      throw new BadRequestException(`Payment initialization failed: ${err.message}`);
+    }
+  }
+
+  async verifyExternalPayment(reference: string) {
+    if (!reference?.trim()) {
+      throw new BadRequestException('Payment reference is required');
+    }
+
+    try {
+      const response = await this.paystackConfig.request<any>('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+      const tx = response?.data;
+      const paystackStatus = String(tx?.status ?? 'unknown').toLowerCase();
+      const amountPaid = Number(tx?.amount ?? 0) / 100;
+
+      if (paystackStatus !== 'success') {
+        return {
+          status: paystackStatus,
+          message: `Payment status: ${paystackStatus}`,
+        };
+      }
+
+      if (tx?.metadata?.type !== 'registration_fee') {
+        throw new ForbiddenException('Invalid transaction type for registration.');
+      }
+
+      if (amountPaid < this.REGISTRATION_FEE) {
+        throw new BadRequestException('Insufficient payment amount.');
+      }
+
+      return {
+        status: 'success',
+        amount: amountPaid,
+        email: tx.customer?.email,
+        reference: tx.reference,
+      };
+    } catch (err) {
+      this.logger.error(`External payment verification failed for sequence ${reference}: ${err.message}`);
+      throw err;
     }
   }
 

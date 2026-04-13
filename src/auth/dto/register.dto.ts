@@ -147,4 +147,8 @@ export class RegisterUserDto {
 
   @IsOptional()
   organisationId?: number;
+
+  @IsString()
+  @IsOptional()
+  token?: string;
 }
