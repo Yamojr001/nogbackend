@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Token } from '../entities/token.entity';
 import { MonnifyService } from '../monnify/monnify.service';
+import { EmailService } from '../email/email.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class TokenService {
     private readonly tokenRepo: Repository<Token>,
     private readonly monnifyService: MonnifyService,
     private readonly dataSource: DataSource,
+    private readonly emailService: EmailService,
   ) {}
 
   generateTokenCode(): string {
@@ -63,7 +65,25 @@ export class TokenService {
       isUsed: false,
     });
 
-    return this.tokenRepo.save(token);
+    const savedToken = await this.tokenRepo.save(token);
+
+    // Send the token email securely
+    try {
+      await this.emailService.queueEmail(
+        savedToken.payerEmail,
+        'token_purchase', 
+        'Your NOGALSS Registration Token',
+        'token_purchase',
+        {
+          name: savedToken.payerName,
+          token: savedToken.token,
+        }
+      );
+    } catch (error: any) {
+      this.logger.error(`Failed to queue token email for ${savedToken.payerEmail}: ${error.message}`);
+    }
+
+    return savedToken;
   }
 
   async validateToken(tokenCode: string) {
