@@ -42,8 +42,12 @@ export class MonnifyService {
     }
   }
 
-  async verifyTransaction(transactionReference: string) {
-    const res = await this.monnifyConfig.request('GET', `/api/v1/merchant/transactions/query?transactionReference=${transactionReference}`);
+  async verifyTransaction(reference: string) {
+    // If it starts with MNFY (or includes '|'), it's a Monnify transaction reference
+    const isTransactionRef = reference.startsWith('MNFY') || reference.includes('|');
+    const queryParam = isTransactionRef ? 'transactionReference' : 'paymentReference';
+    
+    const res = await this.monnifyConfig.request('GET', `/api/v1/merchant/transactions/query?${queryParam}=${encodeURIComponent(reference)}`);
     
     if (res.requestSuccessful) {
       return res.responseBody;

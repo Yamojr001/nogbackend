@@ -57,9 +57,9 @@ export class TokenService {
     const token = this.tokenRepo.create({
       token: tokenStr,
       paymentReference,
-      payerName: payment.customer.name,
-      payerEmail: payment.customer.email,
-      payerPhone: payment.customer.phone || '',
+      payerName: payment.customerDTO?.name || payment.customer?.name || payment.customerName || 'N/A',
+      payerEmail: payment.customerDTO?.email || payment.customer?.email || payment.customerEmail || 'N/A',
+      payerPhone: payment.customerDTO?.phoneNumber || payment.customer?.phone || payment.customerPhone || '',
       isUsed: false,
     });
 

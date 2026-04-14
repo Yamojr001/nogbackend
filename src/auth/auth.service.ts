@@ -507,7 +507,7 @@ export class AuthService {
         proposedSavingsAmount: dto.proposedSavingsAmount,
         empowermentInterest: dto.empowermentInterest,
         kycStatus: token ? 'verified' : 'pending',
-        status: token ? 'active' : 'pending',
+        status: token ? 'approved' : 'pending',
         hasPaidRegistrationFee: token ? true : false,
       });
 

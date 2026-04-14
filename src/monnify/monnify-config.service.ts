@@ -54,87 +54,53 @@ export class MonnifyConfigService {
       throw new Error('Monnify configuration missing: API Key or Secret Key not found in DB or .env');
     }
 
-    return new Promise((resolve, reject) => {
-      this.logger.log(`Attempting Monnify login at: ${baseUrl}/api/v1/auth/login`);
-      const auth = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
-      const options: https.RequestOptions = {
-        method: 'POST',
+    this.logger.log(`Attempting Monnify login at: ${baseUrl}/api/v1/auth/login`);
+    const auth = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
+    
+    try {
+      const axios = require('axios');
+      const res = await axios.post(`${baseUrl}/api/v1/auth/login`, {}, {
         headers: {
           Authorization: `Basic ${auth}`,
         },
-        timeout: 10000, // 10s timeout
-      };
+      });
 
-      const req = https.request(`${baseUrl}/api/v1/auth/login`, options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            if (res.statusCode && res.statusCode >= 400) {
-              this.logger.error(`Monnify Auth HTTP Error ${res.statusCode}: ${data}`);
-              return reject(new Error(`Monnify HTTP Error ${res.statusCode}`));
-            }
-            const json = JSON.parse(data);
-            if (json.requestSuccessful) {
-              this.accessToken = json.responseBody.accessToken;
-              this.tokenExpiry = Date.now() + (json.responseBody.expiresIn * 1000) - 60000;
-              resolve(this.accessToken!);
-            } else {
-              this.logger.error(`Monnify Auth Error Response: ${data}`);
-              reject(new Error(`Monnify Auth Error: ${json.responseMessage}`));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        });
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Monnify Auth Timeout (ETIMEDOUT)'));
-      });
-      req.on('error', (err) => {
-        this.logger.error(`Monnify Network Error: ${err.message}`);
-        reject(err);
-      });
-      req.end();
-    });
+      const json = res.data;
+      
+      if (json.requestSuccessful) {
+        this.accessToken = json.responseBody.accessToken;
+        this.tokenExpiry = Date.now() + (json.responseBody.expiresIn * 1000) - 60000;
+        return this.accessToken!;
+      } else {
+        this.logger.error(`Monnify Auth Error Response: ${JSON.stringify(json)}`);
+        throw new Error(`Monnify Auth Error: ${json.responseMessage}`);
+      }
+    } catch (err: any) {
+      this.logger.error(`Monnify Network Error: ${err.message}`);
+      throw err;
+    }
   }
 
   async request<T = any>(method: 'GET' | 'POST', path: string, body?: object): Promise<T> {
     const token = await this.getAccessToken();
     const baseUrl = await this.getBaseUrl();
+    const url = new URL(path, baseUrl);
+    const axios = require('axios');
 
-    return new Promise((resolve, reject) => {
-      const url = new URL(path, baseUrl);
-      const payload = body ? JSON.stringify(body) : undefined;
-
-      const options: https.RequestOptions = {
-        hostname: url.hostname,
-        path: url.pathname + url.search,
+    try {
+      const res = await axios({
         method,
+        url: url.toString(),
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            resolve(json as T);
-          } catch {
-            reject(new Error(`Invalid JSON from Monnify: ${data}`));
-          }
-        });
+        data: body,
       });
 
-      req.on('error', reject);
-      if (payload) req.write(payload);
-      req.end();
-    });
+      return res.data as T;
+    } catch (err: any) {
+      throw new Error(`Monnify API Error: ${err.message}`);
+    }
   }
 }
