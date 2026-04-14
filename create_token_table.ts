@@ -9,12 +9,11 @@ const myDataSource = new DataSource({
 async function run() {
     await myDataSource.initialize();
     const result = await myDataSource.query(`
-        SELECT pg_get_constraintdef(c.oid) AS constraint_def
-        FROM pg_constraint c
-        JOIN pg_class t ON c.conrelid = t.oid
-        WHERE t.relname = 'members' AND c.conname = 'members_status_check';
+        ALTER TABLE "tokens"
+        ADD COLUMN IF NOT EXISTS "draftData" jsonb,
+        ADD COLUMN IF NOT EXISTS "draftStep" integer DEFAULT 1;
     `);
-    console.log("Constraint definition:", result);
+    console.log("Tokens table altered successfully:", result);
     process.exit(0);
 }
 

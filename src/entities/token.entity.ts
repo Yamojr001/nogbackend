@@ -26,6 +26,12 @@ export class Token {
   @Column({ nullable: true })
   usedByUserId: number;
 
+  @Column({ type: 'jsonb', nullable: true })
+  draftData: any;
+
+  @Column({ type: 'int', default: 1 })
+  draftStep: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

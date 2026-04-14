@@ -49,10 +49,13 @@ export class AuthService {
     );
   }
 
-  private async findUserForLogin(email: string): Promise<any | null> {
+  private async findUserForLogin(identifier: string): Promise<any | null> {
     try {
       return await this.userRepository.findOne({ 
-        where: { email }, 
+        where: [
+          { email: identifier },
+          { phone: identifier }
+        ], 
         relations: ['organisation', 'memberProfile'] 
       });
     } catch (error) {
@@ -61,7 +64,6 @@ export class AuthService {
       }
 
       // Dynamic fallback for environments with older/inconsistent DB schemas.
-      // We check what columns actually exist to avoid 500 errors.
       const tablesToTry = ['users', '"user"']; 
       let rows: any[] = [];
 
@@ -85,9 +87,15 @@ export class AuthService {
           if (availableCols.has('organization_id')) selectFields.push('organization_id');
           if (availableCols.has('branch_id')) selectFields.push('branch_id');
 
+          const whereClause = availableCols.has('phone') 
+            ? `WHERE email = $1 OR phone = $2`
+            : `WHERE email = $1`;
+          
+          const params = availableCols.has('phone') ? [identifier, identifier] : [identifier];
+
           rows = await this.dataSource.query(
-            `SELECT ${selectFields.join(', ')} FROM ${table} WHERE email = $1 LIMIT 1`,
-            [email]
+            `SELECT ${selectFields.join(', ')} FROM ${table} ${whereClause} LIMIT 1`,
+            params
           );
           if (rows.length > 0) break;
         } catch (e) {
@@ -582,11 +590,11 @@ export class AuthService {
     };
   }
 
-  async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.findUserForLogin(email);
+  async validateUser(identifier: string, password: string): Promise<any> {
+    const user = await this.findUserForLogin(identifier);
     if (!user) return null;
 
-    console.log(`[Auth] Login attempt for ${email} - user found: ${!!user}`);
+    console.log(`[Auth] Login attempt for ${identifier} - user found: ${!!user}`);
 
     // Phase 5: Brute-force protection
     if (user.lockUntil && user.lockUntil > new Date()) {
@@ -598,7 +606,7 @@ export class AuthService {
     const isMatch = await bcrypt.compare(password, normalizedHash);
 
     if (isMatch) {
-      console.log(`[Auth] User ${email} successfully logged in`);
+      console.log(`[Auth] User ${identifier} successfully logged in`);
       // Success: Reset failure count and captcha
       if (user.failedLoginAttempts > 0 || user.lockUntil || user.needsCaptcha) {
         await this.safeUserUpdate(user.id, { failedLoginAttempts: 0, lockUntil: null, needsCaptcha: false });
