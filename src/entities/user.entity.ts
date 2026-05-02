@@ -110,6 +110,9 @@ export class User {
   @Column({ name: 'has_paid_registration_fee', default: false })
   hasPaidRegistrationFee: boolean;
 
+  @Column({ name: 'must_change_password', default: false })
+  mustChangePassword: boolean;
+
   @Column({ name: 'paystack_customer_code', nullable: true })
   paystackCustomerCode: string;
 

@@ -17,6 +17,9 @@ import { Notification, NotificationType } from '../entities/notification.entity'
 import { PaystackConfigService } from './paystack-config.service';
 import { EmailService } from '../email/email.service';
 import { PaymentService } from './payment.service';
+import { NotificationService } from '../notification/notification.service';
+import { ParallexPaymentService } from '../parallex/parallex-payment.service';
+import { ParallexConfigService } from '../parallex/parallex-config.service';
 
 @Injectable()
 export class VirtualAccountService {
@@ -33,12 +36,15 @@ export class VirtualAccountService {
     private readonly dataSource: DataSource,
     private readonly emailService: EmailService,
     private readonly paymentService: PaymentService,
+    private readonly notificationService: NotificationService,
+    private readonly parallexPaymentService: ParallexPaymentService,
+    private readonly parallexConfig: ParallexConfigService,
   ) {}
 
   // ─── PUBLIC API ───────────────────────────────────────────────────────────
 
-  /** Provision a Paystack dedicated virtual account for a verified user */
-  async provision(userId: number): Promise<VirtualAccount> {
+  /** Provision a dedicated virtual account for a verified user */
+  async provision(userId: number): Promise<any> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
@@ -47,11 +53,24 @@ export class VirtualAccountService {
     }
 
     const existing = await this.vaRepo.findOne({ where: { userId } });
-    if (existing) throw new ConflictException('User already has a virtual account');
+    if (existing && existing.accountNumber) throw new ConflictException('User already has a virtual account');
 
-    const enabled = await this.paystackConfig.isEnabled();
-    if (!enabled) {
-      // Create a placeholder record so the admin can activate later
+    // Priority 1: Parallex
+    const parallexEnabled = await this.parallexConfig.isEnabled();
+    if (parallexEnabled) {
+      this.logger.log(`Provisioning Parallex account for user ${userId}`);
+      return this.parallexPaymentService.createVirtualAccount(userId);
+    }
+
+    // Priority 2: Paystack
+    const paystackEnabled = await this.paystackConfig.isEnabled();
+    if (paystackEnabled) {
+      this.logger.log(`Provisioning Paystack account for user ${userId}`);
+      return this.callPaystackAndSave(user, existing ?? undefined);
+    }
+
+    // Fallback: Create a placeholder record
+    if (!existing) {
       const placeholder = this.vaRepo.create({
         userId,
         status: VirtualAccountStatus.PENDING,
@@ -59,8 +78,8 @@ export class VirtualAccountService {
       });
       return this.vaRepo.save(placeholder);
     }
-
-    return this.callPaystackAndSave(user);
+    
+    return existing;
   }
 
   /** Admin can activate a pending virtual account once keys are configured */
@@ -79,7 +98,18 @@ export class VirtualAccountService {
 
   /** Find a user's virtual account */
   async findByUserId(userId: number): Promise<VirtualAccount | null> {
-    return this.vaRepo.findOne({ where: { userId } });
+    return this.vaRepo.findOne({ 
+      where: { userId },
+      order: { updatedAt: 'DESC' }
+    });
+  }
+
+  /** Find an organisation's virtual account */
+  async findByOrganisationId(organisationId: number): Promise<VirtualAccount | null> {
+    return this.vaRepo.findOne({ 
+      where: { organisationId },
+      order: { updatedAt: 'DESC' }
+    });
   }
 
   /** Used by admin listing */
@@ -374,6 +404,19 @@ export class VirtualAccountService {
       }
 
       this.logger.log(`Wallet credited: userId=${va.userId}, amount=NGN ${amountNGN}, balance=${balanceAfter}`);
+      // Send SMS notification (non-blocking)
+      try {
+        if (va.user?.phone) {
+          await this.notificationService.trigger(
+            va.user.id,
+            'Wallet Credited',
+            `Your wallet has been credited with NGN ${amountNGN.toLocaleString()}. New balance: NGN ${balanceAfter.toLocaleString()}.`,
+            [NotificationType.SMS, NotificationType.IN_APP]
+          ).catch(e => this.logger.warn('Notification trigger failed:', e.message));
+        }
+      } catch (notifyErr) {
+        this.logger.warn('SMS notification failed after virtual account credit:', notifyErr.message);
+      }
     } catch (err) {
       await queryRunner.rollbackTransaction();
       this.logger.error('creditWallet transaction failed', err.message);

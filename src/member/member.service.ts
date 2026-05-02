@@ -95,10 +95,37 @@ export class MemberService {
       where: { id: userId },
       relations: ['memberProfile', 'memberProfile.wallet'],
     });
+
     if (!user?.memberProfile?.wallet) {
       throw new Error('Wallet not found for this member');
     }
-    return user.memberProfile.wallet;
+
+    const virtualAccount = await this.dataSource.getRepository('VirtualAccount').findOne({
+      where: { userId, gateway: 'parallex' },
+    });
+
+    const bankAccount = await this.dataSource.getRepository('BankAccount').findOne({
+      where: { ownerId: userId, ownerType: 'member' as any },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      ...user.memberProfile.wallet,
+      virtualAccount: virtualAccount ? {
+        accountNumber: virtualAccount.accountNumber,
+        accountName: virtualAccount.accountName,
+        bankName: virtualAccount.bankName,
+        status: virtualAccount.status,
+      } : null,
+      bankAccount: bankAccount ? {
+        bankName: bankAccount.bankName,
+        accountNumber: bankAccount.accountNumber,
+        accountName: bankAccount.accountName,
+      } : null,
+      // For cards, we could fetch from a cards table if it exists, 
+      // but for now we'll return null to be safe.
+      card: null, 
+    };
   }
 
   async getTransactions(userId: number, filters: any = {}) {

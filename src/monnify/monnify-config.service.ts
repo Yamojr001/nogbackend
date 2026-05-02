@@ -16,8 +16,27 @@ export class MonnifyConfigService {
   ) {}
 
   private async get(key: string, fallback = ''): Promise<string> {
-    const row = await this.configRepo.findOne({ where: { key } });
-    return (row?.value ?? fallback).trim();
+    const envValue = fallback.trim();
+
+    try {
+      const row = await this.configRepo.findOne({ where: { key } });
+      const dbValue = (row?.value ?? '').trim();
+      return dbValue || envValue;
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch Monnify config for key "${key}": ${error.message}. Using fallback.`);
+
+      // Schema-safe fallback for environments where repository/entity reads fail.
+      try {
+        const rows = await this.configRepo.query(
+          'SELECT value FROM system_config WHERE key = $1 LIMIT 1',
+          [key],
+        );
+        const rawDbValue = (rows?.[0]?.value ?? '').toString().trim();
+        return rawDbValue || envValue;
+      } catch {
+        return envValue;
+      }
+    }
   }
 
   async getApiKey(): Promise<string> {
@@ -33,7 +52,7 @@ export class MonnifyConfigService {
   }
 
   async getBaseUrl(): Promise<string> {
-    return this.get('monnify.base_url', process.env.MONNIFY_BASE_URL ?? 'https://api.monnify.com');
+    return this.get('monnify.base_url', process.env.MONNIFY_BASE_URL ?? 'https://sandbox.monnify.com');
   }
 
   async isEnabled(): Promise<boolean> {

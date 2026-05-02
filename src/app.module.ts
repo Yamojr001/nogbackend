@@ -78,10 +78,21 @@ import { TokenModule } from './token/token.module';
 import { MonnifyModule } from './monnify/monnify.module';
 import { Bank } from './entities/bank.entity';
 import { Token } from './entities/token.entity';
+import { BvnVerification } from './entities/bvn-verification.entity';
+import { ParallexModule } from './parallex/parallex.module';
+import { BankAccountModule } from './bank-account/bank-account.module';
+import * as path from 'path';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      // Support launching Nest from either `/Ngloas` or `/Ngloas/backend`.
+      envFilePath: [
+        path.resolve(process.cwd(), 'backend/.env'),
+        path.resolve(process.cwd(), '.env'),
+      ],
+    }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
       limit: 100,
@@ -114,7 +125,7 @@ import { Token } from './entities/token.entity';
             Collection, BranchTarget, BranchExpense,
             Attendance, Meeting, SupportTicket, Guarantor, Beneficiary, EmailLog, OtpCode, SmsLog, UserTour,
             BankAccount, NextOfKin, EmpowermentProgram, ProgramApplication,
-            VirtualAccount, Bank, Token
+            VirtualAccount, Bank, Token, BvnVerification
           ],
           synchronize,
           ssl: config.get<string>('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
@@ -151,6 +162,8 @@ import { Token } from './entities/token.entity';
     BanksModule,
     TokenModule,
     MonnifyModule,
+    ParallexModule,
+    BankAccountModule,
   ],
   providers: [
     {

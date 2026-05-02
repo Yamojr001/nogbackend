@@ -5,12 +5,14 @@ import { TokenService } from './token.service';
 import { TokenController } from './token.controller';
 import { MonnifyModule } from '../monnify/monnify.module';
 import { EmailModule } from '../email/email.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Token]),
     MonnifyModule,
     EmailModule,
+    NotificationModule, // SMS service for token delivery
   ],
   providers: [TokenService],
   controllers: [TokenController],

@@ -17,6 +17,7 @@ import { PaystackWebhookController } from './paystack-webhook.controller';
 import { VirtualAccountController, PaymentSettingsController } from './virtual-account.controller';
 import { EmailModule } from '../email/email.module';
 import { Member } from '../entities/member.entity';
+import { ParallexModule } from '../parallex/parallex.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { Member } from '../entities/member.entity';
       Member,
     ]),
     EmailModule,
+    ParallexModule,
   ],
   providers: [
     PaystackConfigService,

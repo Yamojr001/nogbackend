@@ -62,10 +62,74 @@ export class ApprovalEngineService {
   };
 
   /**
-   * Initialize a workflow for a given reference.
+   * Resolve the hierarchical approval chain for a member based on their organizational position.
+   * If member is in a group → SUB_ORG_ADMIN → PARTNER_ADMIN → SUPER_ADMIN
+   * If member is direct member of sub-org → SUB_ORG_ADMIN → PARTNER_ADMIN → SUPER_ADMIN
+   * If member is direct member of partner → PARTNER_ADMIN → SUPER_ADMIN
+   * If member is direct member of apex → SUPER_ADMIN only
    */
-  async process(referenceType: string, referenceId: number, initiatorId: number) {
-    const roles = this.workflows[referenceType] || [UserRole.SUPER_ADMIN];
+  async resolveApprovalChain(member: any): Promise<string[]> {
+    if (!member) return [UserRole.SUPER_ADMIN];
+
+    const chain: string[] = [];
+
+    // Check if member is part of a group (deepest level)
+    if (member.groupId && member.group?.organisationId) {
+      // Member → Group → Sub-Org (or Partner)
+      const groupOrg = member.group.organisationId;
+      chain.push(UserRole.SUB_ORG_ADMIN); // Sub-org admin must approve first
+
+      // Check if this sub-org has a parent (partner)
+      if (member.group?.organisation?.parent?.id) {
+        chain.push(UserRole.PARTNER_ADMIN); // Then partner admin
+      }
+    } else if (member.subOrgId) {
+      // Member is direct member of sub-org
+      chain.push(UserRole.SUB_ORG_ADMIN);
+      
+      // Load parent to see if sub-org has a parent
+      const memberRepo = this.dataSource.getRepository('Member');
+      const org = await this.dataSource.getRepository('Organisation').findOne({
+        where: { id: member.subOrgId },
+        relations: ['parent'],
+      });
+      if (org?.parent?.id) {
+        chain.push(UserRole.PARTNER_ADMIN);
+      }
+    } else if (member.organisationId) {
+      // Check if this org is a partner or if it's the apex
+      const org = await this.dataSource.getRepository('Organisation').findOne({
+        where: { id: member.organisationId },
+        relations: ['parent'],
+      });
+      
+      if (org?.type === 'partner') {
+        // Direct member of partner org
+        chain.push(UserRole.PARTNER_ADMIN);
+      } else if (org?.type === 'sub_org') {
+        // Shouldn't reach here (this would be caught by subOrgId check above)
+        chain.push(UserRole.SUB_ORG_ADMIN);
+        if (org.parent?.id) {
+          chain.push(UserRole.PARTNER_ADMIN);
+        }
+      }
+      // If apex (no parent), skip adding to chain
+    }
+
+    // Always end with SUPER_ADMIN
+    if (!chain.includes(UserRole.SUPER_ADMIN)) {
+      chain.push(UserRole.SUPER_ADMIN);
+    }
+
+    this.logger.log(`Resolved approval chain for member ${member.id}: ${chain.join(' → ')}`);
+    return chain;
+  }
+
+  /**
+   * Initialize a workflow for a given reference with optional dynamic approval chain.
+   */
+  async process(referenceType: string, referenceId: number, initiatorId: number, customChain?: string[]) {
+    const roles = customChain || this.workflows[referenceType] || [UserRole.SUPER_ADMIN];
     
     await this.approvalService.create({
       requestType: referenceType,
@@ -75,7 +139,18 @@ export class ApprovalEngineService {
       currentLevel: 1,
       status: ApprovalStatus.PENDING,
     });
-    this.logger.log(`Started workflow for ${referenceType} ${referenceId}`);
+    this.logger.log(`Started workflow for ${referenceType} ${referenceId} with ${roles.length} approval levels`);
+  }
+
+  /**
+   * Special handler for loan approval that derives the hierarchy from member context.
+   */
+  async processLoanApproval(loanId: number, userId: number, member: any) {
+    // Derive the approval chain from member's organizational hierarchy
+    const approvalChain = await this.resolveApprovalChain(member);
+    
+    // Initialize workflow with the dynamic chain
+    await this.process('loan', loanId, userId, approvalChain);
   }
 
   /**

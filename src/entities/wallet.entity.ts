@@ -8,6 +8,7 @@ export enum WalletType {
   SUB_ORG = 'sub_org',
   PARTNER = 'partner',
   SYSTEM = 'system',
+  ORGANISATION = 'organisation',
 }
 
 @Entity('wallets')

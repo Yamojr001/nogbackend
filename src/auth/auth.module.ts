@@ -20,6 +20,7 @@ import { WalletModule } from '../wallet/wallet.module';
 import { ApprovalModule } from '../approval/approval.module';
 import { PaystackModule } from '../paystack/paystack.module';
 import { TokenModule } from '../token/token.module';
+import { ParallexModule } from '../parallex/parallex.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { TokenModule } from '../token/token.module';
     forwardRef(() => WalletModule),
     forwardRef(() => ApprovalModule),
     PaystackModule,
+    ParallexModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

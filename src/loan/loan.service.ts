@@ -51,8 +51,16 @@ export class LoanService {
   }
 
   async requestLoan(userId: number, amount: number, interestRate: number, duration: number): Promise<Loan> {
-    const member = await this.moduleRef.get(getRepositoryToken(Member), { strict: false }).findOne({ where: { userId } });
+    const memberRepo = this.moduleRef.get(getRepositoryToken(Member), { strict: false });
+    
+    const member = await memberRepo.findOne({ where: { userId } });
     if (!member) throw new NotFoundException('Member profile not found');
+
+    // Load full member hierarchy to determine approval chain
+    const memberWithHierarchy = await memberRepo.findOne({
+      where: { userId },
+      relations: ['group', 'group.organisation', 'group.organisation.parent', 'branch', 'organisation', 'organisation.parent'],
+    });
 
     const loan = this.loanRepository.create({
       member: { id: member.id } as any,
@@ -61,15 +69,10 @@ export class LoanService {
       status: LoanStatus.PENDING,
     });
     const saved = await this.loanRepository.save(loan);
-    // start approval workflow via engine
-    await this.approvalService.create({
-      requestType: 'loan',
-      referenceId: saved.id,
-      initiator: { id: userId } as any,
-      status: ApprovalStatus.PENDING,
-      currentLevel: 1,
-    });
-    await this.approvalEngine.process('loan', saved.id, userId);
+    
+    // Use approval engine to route through dynamic hierarchy
+    await this.approvalEngine.processLoanApproval(saved.id, userId, memberWithHierarchy);
+    
     return saved;
   }
 

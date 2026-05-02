@@ -6,6 +6,8 @@ import { User } from '../entities/user.entity';
 import { Transaction, TransactionType, TransactionStatus, TransactionChannel } from '../entities/transaction.entity';
 import { Ledger } from '../entities/ledger.entity';
 import { PaystackConfigService } from './paystack-config.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../entities/notification.entity';
 
 @Injectable()
 export class PaymentService {
@@ -19,6 +21,7 @@ export class PaymentService {
     private readonly userRepo: Repository<User>,
     private readonly paystackConfig: PaystackConfigService,
     private readonly dataSource: DataSource,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async initializeRegistrationPayment(userId: number) {
@@ -430,6 +433,19 @@ export class PaymentService {
 
       await queryRunner.commitTransaction();
       this.logger.log(`Member ${memberId} registration fee payment processed successfully: REF=${reference}`);
+      // Notify member via SMS and in-app
+      try {
+        if (member.user?.id) {
+          await this.notificationService.trigger(
+            member.user.id,
+            'Registration Payment Received',
+            `We have received your registration payment. Reference: ${reference}. Your account has been activated.`,
+            [NotificationType.SMS, NotificationType.EMAIL, NotificationType.IN_APP]
+          ).catch(e => this.logger.warn('Registration notification failed:', e.message));
+        }
+      } catch (notifyErr) {
+        this.logger.warn('Failed to send registration notifications:', notifyErr.message);
+      }
     } catch (err) {
       if (queryRunner.isTransactionActive) {
         await queryRunner.rollbackTransaction();

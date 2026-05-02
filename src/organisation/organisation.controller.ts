@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, Req } from '@nestjs/common';
 import { OrganisationService } from './organisation.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Organisation } from '../entities/organisation.entity';
@@ -18,6 +18,16 @@ export class OrganisationController {
   @Roles(UserRole.SUPER_ADMIN)
   create(@Body() data: CreateOrganisationDto) {
     return this.organisationService.create(data);
+  }
+
+  @Post('sub-org')
+  @Roles(UserRole.PARTNER_ADMIN)
+  createSubOrganisation(@Req() req: any, @Body() data: CreateOrganisationDto) {
+    return this.organisationService.create({
+      ...data,
+      type: 'sub_org' as any,
+      parentId: req.user.organisationId,
+    });
   }
 
   @Get()

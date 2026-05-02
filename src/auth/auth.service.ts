@@ -25,6 +25,7 @@ import { ApprovalEngineService } from '../approval/approval-engine.service';
 import { NextOfKin } from '../entities/next-of-kin.entity';
 import { BankAccount, OwnerType } from '../entities/bank-account.entity';
 import { PaymentService } from '../paystack/payment.service';
+import { ParallexPaymentService } from '../parallex/parallex-payment.service';
 import { TokenService } from '../token/token.service';
 
 @Injectable()
@@ -86,6 +87,7 @@ export class AuthService {
           if (availableCols.has('has_paid_registration_fee')) selectFields.push('has_paid_registration_fee');
           if (availableCols.has('organization_id')) selectFields.push('organization_id');
           if (availableCols.has('branch_id')) selectFields.push('branch_id');
+          if (availableCols.has('must_change_password')) selectFields.push('must_change_password');
 
           const whereClause = availableCols.has('phone') 
             ? `WHERE email = $1 OR phone = $2`
@@ -126,6 +128,7 @@ export class AuthService {
         needsCaptcha: false,
         lockUntil: null,
         refreshTokenHash: null,
+        mustChangePassword: row.must_change_password ?? false,
       };
     }
   }
@@ -267,6 +270,7 @@ export class AuthService {
     private readonly securityService: SecurityService,
     private readonly approvalEngine: ApprovalEngineService,
     private readonly tokenService: TokenService,
+    private readonly parallexPaymentService: ParallexPaymentService,
   ) {}
 
   private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -419,7 +423,9 @@ export class AuthService {
     }
 
     // 2. Check if user exists
-    const existing = await this.userRepository.findOne({ where: { email } });
+    // Use the legacy-schema-compatible lookup so registration still works
+    // against databases that are missing newer `users` columns.
+    const existing = await this.findUserForLogin(email);
     if (existing) {
       throw new UnauthorizedException('Email already registered');
     }
@@ -568,6 +574,32 @@ export class AuthService {
         `Please verify your email to fully activate your account. link: https://nogalss.org/verify-email?token=${verificationToken}`,
         [NotificationType.EMAIL]
       ).catch(e => console.error('[Auth] Verification email failed:', e.message));
+      // Also attempt SMS notifications (non-blocking)
+      try {
+        if (savedUser.phone) {
+          await this.notificationService.trigger(
+            savedUser.id,
+            'Welcome to Coop-OS',
+            `Welcome ${savedUser.firstName}! Your account status is ${savedUser.status}.`,
+            [NotificationType.SMS]
+          );
+
+          await this.notificationService.trigger(
+            savedUser.id,
+            'Verify Your Email - Coop-OS',
+            `Verify your account: https://nogalss.org/verify-email?token=${verificationToken}`,
+            [NotificationType.SMS]
+          );
+        }
+      } catch (smsErr) {
+        console.error('[Auth] Registration SMS failed:', smsErr.message);
+      }
+      // Auto-create Parallex Virtual Account
+      try {
+        await this.parallexPaymentService.createVirtualAccount(savedUser.id);
+      } catch (vaErr) {
+        console.error('[Auth] Parallex VA creation failed:', vaErr.message);
+      }
     } catch (postErr) {
       console.error('[Auth] Registration post-processing error:', postErr.message);
     }
@@ -660,6 +692,7 @@ export class AuthService {
         groupId,
         hasPaidRegistrationFee,
         isProfileComplete,
+        mustChangePassword: Boolean(user.mustChangePassword),
       };
 
       // Security: detect new login device/IP
@@ -711,6 +744,7 @@ export class AuthService {
         user_name: user.name ?? `${user.firstName} ${user.lastName}`,
         hasPaidRegistrationFee,
         isProfileComplete,
+        mustChangePassword: Boolean(user.mustChangePassword),
         message: hasPaidRegistrationFee ? 'SUCCESS' : 'PAYMENT_REQUIRED',
         organisationId: payload.organisationId,
       };
@@ -765,6 +799,27 @@ export class AuthService {
   async logout(userId: number): Promise<{ message: string }> {
     await this.userRepository.update(userId, { refreshTokenHash: null });
     return { message: 'Logged out successfully' };
+  }
+
+  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const validCurrent = await bcrypt.compare(currentPassword, this.normalizeBcryptHash(user.password));
+    if (!validCurrent) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    if (!this.validatePasswordStrength(newPassword)) {
+      throw new BadRequestException('New password is too weak. Must be 8+ chars with uppercase, lowercase, number, and special character.');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.mustChangePassword = false;
+    await this.userRepository.save(user);
+
+    return { message: 'Password changed successfully' };
   }
 
   async getProfile(userId: number) {
@@ -941,7 +996,7 @@ export class AuthService {
 
   async getPublicGroups(subOrgId: number) {
     return this.dataSource.getRepository(Group).find({
-      select: ['id', 'name'],
+      select: ['id', 'name', 'code'],
       where: { organisation: { id: subOrgId } as any, status: 'active' as any }
     });
   }

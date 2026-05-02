@@ -1,10 +1,13 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TreeRepository, Repository } from 'typeorm';
 import { Organisation } from '../entities/organisation.entity';
 import { CreateOrganisationDto } from './dto/create-organisation.dto';
 import { UpdateOrganisationDto } from './dto/update-organisation.dto';
 import { NotFoundException } from '@nestjs/common';
+import { User, UserRole } from '../entities/user.entity';
+import * as bcrypt from 'bcrypt';
+import { ParallexPaymentService } from '../parallex/parallex-payment.service';
 
 @Injectable()
 export class OrganisationService {
@@ -13,7 +16,22 @@ export class OrganisationService {
     private organisationTreeRepository: TreeRepository<Organisation>,
     @InjectRepository(Organisation)
     private organisationRepository: Repository<Organisation>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private readonly parallexPaymentService: ParallexPaymentService,
   ) {}
+
+  private getCreatorRole(type?: string): UserRole {
+    switch (type) {
+      case 'partner':
+        return UserRole.PARTNER_ADMIN;
+      case 'sub_org':
+        return UserRole.SUB_ORG_ADMIN;
+      case 'apex':
+      default:
+        return UserRole.SUPER_ADMIN;
+    }
+  }
 
   async create(data: CreateOrganisationDto): Promise<Organisation> {
     const parentCode = (data as any).parentOrgCode;
@@ -44,7 +62,45 @@ export class OrganisationService {
     (data as any).code = generateOrgCode();
 
     const org = this.organisationRepository.create(data as any) as any;
-    return this.organisationRepository.save(org as any);
+    const savedOrg = await this.organisationRepository.save(org as any);
+
+    const loginEmail = data.repEmail || data.email;
+    const tempPassword = data.repPhone || data.phone;
+
+    if (loginEmail && tempPassword) {
+      const existing = await this.userRepository.findOne({ where: [{ email: loginEmail }, { phone: tempPassword }] });
+      if (existing) {
+        throw new BadRequestException('A user with this email or phone already exists.');
+      }
+
+      const passwordHash = await bcrypt.hash(String(tempPassword), 10);
+      const adminUser = this.userRepository.create({
+        email: loginEmail,
+        phone: tempPassword,
+        password: passwordHash,
+        name: data.repName || data.name,
+        firstName: data.repName?.split(' ')?.[0] || data.name?.split(' ')?.[0] || data.name,
+        role: this.getCreatorRole(savedOrg.type),
+        organisationId: savedOrg.id,
+        organisation: { id: savedOrg.id } as Organisation,
+        status: 'active',
+        isVerified: true,
+        mustChangePassword: true,
+      });
+
+      const savedUser = await this.userRepository.save(adminUser);
+      savedOrg.representativeUserId = savedUser.id;
+      await this.organisationRepository.save(savedOrg);
+    }
+
+    // Auto-create Parallex Virtual Account for Organisation
+    try {
+      await this.parallexPaymentService.createOrganisationVirtualAccount(savedOrg.id);
+    } catch (vaErr) {
+      console.error('[OrganisationService] Parallex VA creation failed:', vaErr.message);
+    }
+
+    return savedOrg;
   }
 
   private async generateCode(type: string): Promise<string> {

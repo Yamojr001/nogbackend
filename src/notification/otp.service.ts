@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import { OtpCode, OtpPurpose, OtpStatus } from '../entities/otp-code.entity';
 import { User } from '../entities/user.entity';
+import { NotificationService } from './notification.service';
+import { NotificationType } from '../entities/notification.entity';
 
 @Injectable()
 export class OtpService {
@@ -11,6 +13,9 @@ export class OtpService {
   constructor(
     @InjectRepository(OtpCode)
     private otpRepository: Repository<OtpCode>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private notificationService: NotificationService,
   ) {}
 
   async generateOtp(userId: number, purpose: OtpPurpose): Promise<string> {
@@ -38,6 +43,22 @@ export class OtpService {
 
     await this.otpRepository.save(otp);
     this.logger.log(`Generated OTP for user ${userId} [${purpose}]: ${code}`);
+
+    // Send OTP via NotificationService (respects user preferences). Do not block on failures.
+    try {
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      const phone = (user as any)?.phone || (user as any)?.phoneNumber;
+      if (phone) {
+        const message = `Your verification code is ${code}. It expires in 5 minutes.`;
+        await this.notificationService.trigger(userId, 'Verification Code', message, [NotificationType.SMS]).catch(e => this.logger.error('Notification trigger failed', e));
+        this.logger.log(`Triggered OTP notification for user ${userId}`);
+      } else {
+        this.logger.warn(`No phone number for user ${userId}; skipping SMS notify.`);
+      }
+    } catch (err) {
+      this.logger.error('Failed to trigger OTP notification', err as any);
+    }
+
     return code;
   }
 

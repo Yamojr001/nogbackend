@@ -46,7 +46,7 @@ export class ReportingController {
   }
 
   @Get('financial-performance')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.FINANCE_ADMIN, UserRole.PARTNER_ADMIN)
   async getFinancialPerformance() {
     return this.reportingService.getFinancialPerformance();
   }

@@ -95,7 +95,7 @@ export class Transaction {
   organisation: Organisation;
 
   @Index()
-  @Column({ name: 'organisation_id' })
+  @Column({ name: 'organisation_id', nullable: true })
   organisationId: number;
 
   @ManyToOne(() => Branch, { nullable: true })
@@ -132,6 +132,9 @@ export class Transaction {
 
   @Column({ name: 'reversal_of', nullable: true })
   reversalOf: number; 
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: any; 
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

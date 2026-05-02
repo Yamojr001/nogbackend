@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Param, ParseIntPipe,
   UseGuards, Req, Query, Body, ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -30,6 +31,27 @@ export class VirtualAccountController {
       status: va?.status ?? 'not_provisioned',
       balance: va?.balance ?? 0,
       currency: va?.currency ?? 'NGN',
+      gateway: va?.gateway ?? 'unknown',
+    };
+  }
+
+  /** Get organisation virtual account */
+  @Get('organisation')
+  async getOrgAccount(@Req() req: any) {
+    const orgId = req.user.organisationId;
+    if (!orgId) throw new BadRequestException('No organisation associated with this user');
+
+    const va = await this.vaService.findByOrganisationId(orgId);
+    return {
+      hasAccount: !!va?.accountNumber,
+      isReady: va?.status === 'active',
+      accountNumber: va?.accountNumber ?? null,
+      accountName: va?.accountName ?? null,
+      bankName: va?.bankName ?? null,
+      status: va?.status ?? 'not_provisioned',
+      balance: va?.balance ?? 0,
+      currency: va?.currency ?? 'NGN',
+      gateway: va?.gateway ?? 'unknown',
     };
   }
 

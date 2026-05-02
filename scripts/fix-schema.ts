@@ -33,6 +33,44 @@ async function fixSchema() {
       await client.query('ALTER TABLE members ADD COLUMN payment_reference VARCHAR(255)');
     }
 
+    // 1b. Fix users table
+    console.log('Checking "users" table columns...');
+    const userCols = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'users'
+    `);
+    const existingUserCols = new Set(userCols.rows.map(r => r.column_name));
+
+    if (!existingUserCols.has('must_change_password')) {
+      console.log('Adding "must_change_password" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE');
+    }
+    if (!existingUserCols.has('refresh_token_hash')) {
+      console.log('Adding "refresh_token_hash" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR(255)');
+    }
+    if (!existingUserCols.has('failed_login_attempts')) {
+      console.log('Adding "failed_login_attempts" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0');
+    }
+    if (!existingUserCols.has('needs_captcha')) {
+      console.log('Adding "needs_captcha" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN needs_captcha BOOLEAN DEFAULT FALSE');
+    }
+    if (!existingUserCols.has('lock_until')) {
+      console.log('Adding "lock_until" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN lock_until TIMESTAMP NULL');
+    }
+    if (!existingUserCols.has('reset_token')) {
+      console.log('Adding "reset_token" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)');
+    }
+    if (!existingUserCols.has('reset_token_expires')) {
+      console.log('Adding "reset_token_expires" to "users"...');
+      await client.query('ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP NULL');
+    }
+
     // 2. Fix organizations table
     console.log('Checking "organizations" table columns...');
     const orgCols = await client.query(`
