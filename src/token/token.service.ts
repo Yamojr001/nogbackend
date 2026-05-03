@@ -93,12 +93,14 @@ export class TokenService {
 
     // Generate new token
     const tokenStr = this.generateTokenCode();
+    const resolvedPhone = payment.customerDTO?.phoneNumber || payment.customer?.phone || payment.customerPhone || fallbackPhone || '';
+    this.logger.log(`🔍 Phone resolution: monnify=${payment.customerDTO?.phoneNumber || payment.customer?.phone || payment.customerPhone || 'NONE'}, fallback=${fallbackPhone || 'NONE'}, final=${resolvedPhone || 'EMPTY'}`);
     const token = this.tokenRepo.create({
       token: tokenStr,
       paymentReference,
       payerName: payment.customerDTO?.name || payment.customer?.name || payment.customerName || 'N/A',
       payerEmail: payment.customerDTO?.email || payment.customer?.email || payment.customerEmail || 'N/A',
-      payerPhone: payment.customerDTO?.phoneNumber || payment.customer?.phone || payment.customerPhone || fallbackPhone || '',
+      payerPhone: resolvedPhone,
       isUsed: false,
     });
 
@@ -124,7 +126,8 @@ export class TokenService {
 
     // Send SMS with token if phone provided (non-blocking)
     try {
-      if (savedToken.payerPhone) {
+      this.logger.log(`🔎 Checking SMS: payerPhone='${savedToken.payerPhone}', isEmpty=${!savedToken.payerPhone}`);
+      if (savedToken.payerPhone && savedToken.payerPhone.trim()) {
         this.logger.log(`📱 Sending token SMS to ${savedToken.payerPhone} with token: ${savedToken.token.substring(0, 8)}...`);
         const smsSent = await this.smsService.sendSms(
           savedToken.payerPhone,
@@ -136,7 +139,7 @@ export class TokenService {
           this.logger.warn(`⚠️ Token SMS marking as failed for ${savedToken.payerPhone}`);
         }
       } else {
-        this.logger.warn(`⚠️ Phone number not provided, skipping SMS for token ${savedToken.token.substring(0, 8)}...`);
+        this.logger.warn(`⚠️ Phone number not provided or empty, skipping SMS for token ${savedToken.token.substring(0, 8)}... (payerPhone='${savedToken.payerPhone}')`);
       }
     } catch (smsErr: any) {
       this.logger.error(`❌ Failed to send token SMS to ${savedToken.payerPhone}: ${smsErr.message}`, smsErr.stack);

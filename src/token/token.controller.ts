@@ -21,6 +21,7 @@ export class TokenController {
     @Query('phone') phone?: string,
   ) {
     this.logger.log(`📦 Token completion requested for reference: ${paymentReference}`);
+    this.logger.log(`📱 Phone parameter received: ${phone || 'NOT PROVIDED'}`);
     return this.tokenService.verifyAndGenerateToken(paymentReference, phone);
   }
 

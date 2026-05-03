@@ -23,6 +23,8 @@ export class SmsService {
   }
 
   async sendSms(phoneNumber: string, message: string): Promise<boolean> {
+    this.logger.log(`📲 sendSms called with phone='${phoneNumber}', message length=${message.length}`);
+    
     const log = this.smsLogRepository.create({
       phoneNumber,
       message,
@@ -37,10 +39,12 @@ export class SmsService {
 
       let providerResponse: any = null;
       if (this.provider) {
+        this.logger.log(`📤 Sending to provider with phone: ${phoneNumber}`);
         providerResponse = await this.provider.sendSMS(phoneNumber, message, {
           method: 'GET',
         });
       } else {
+        this.logger.warn(`⚠️ No SMS provider configured, simulating send`);
         providerResponse = { simulated: true };
       }
 
@@ -52,6 +56,7 @@ export class SmsService {
         log.providerResponse = String(providerResponse);
       }
       await this.smsLogRepository.save(log);
+      this.logger.log(`✅ SMS marked as SENT, provider response: ${log.providerResponse}`);
       return true;
     } catch (error) {
       this.logger.error(`Failed to send SMS to ${phoneNumber}: ${error.message}`);
