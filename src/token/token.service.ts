@@ -65,7 +65,7 @@ export class TokenService {
     }
   }
 
-  async verifyAndGenerateToken(paymentReference: string) {
+  async verifyAndGenerateToken(paymentReference: string, fallbackPhone?: string) {
     let payment: any;
 
     try {
@@ -98,7 +98,7 @@ export class TokenService {
       paymentReference,
       payerName: payment.customerDTO?.name || payment.customer?.name || payment.customerName || 'N/A',
       payerEmail: payment.customerDTO?.email || payment.customer?.email || payment.customerEmail || 'N/A',
-      payerPhone: payment.customerDTO?.phoneNumber || payment.customer?.phone || payment.customerPhone || '',
+      payerPhone: payment.customerDTO?.phoneNumber || payment.customer?.phone || payment.customerPhone || fallbackPhone || '',
       isUsed: false,
     });
 

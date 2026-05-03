@@ -16,9 +16,12 @@ export class TokenController {
 
   @Public()
   @Get('complete')
-  async completePurchase(@Query('paymentReference') paymentReference: string) {
+  async completePurchase(
+    @Query('paymentReference') paymentReference: string,
+    @Query('phone') phone?: string,
+  ) {
     this.logger.log(`📦 Token completion requested for reference: ${paymentReference}`);
-    return this.tokenService.verifyAndGenerateToken(paymentReference);
+    return this.tokenService.verifyAndGenerateToken(paymentReference, phone);
   }
 
   @Public()
